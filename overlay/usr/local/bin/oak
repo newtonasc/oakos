@@ -1,0 +1,285 @@
+#!/usr/bin/env node
+/*
+ * oak -- a interface do OakOS.
+ *
+ * Num SO convencional, o console te entrega um shell: voce precisa saber o
+ * nome do programa certo antes de conseguir qualquer coisa. Aqui a premissa
+ * e invertida -- voce descreve o que quer, e o sistema decide como fazer.
+ *
+ * Esta e a v0.1: uma casca fina em volta do Claude Code, mais os poucos
+ * comandos nativos necessarios pra se virar quando a IA nao esta disponivel.
+ * A ambicao e que, com o tempo, mais coisas do sistema (pacotes, servicos,
+ * rede, arquivos) passem a ser operadas por descricao em vez de comando.
+ */
+
+'use strict';
+
+const { spawnSync, execSync } = require('child_process');
+const readline = require('readline');
+const os = require('os');
+const fs = require('fs');
+
+const C = {
+  reset: '\x1b[0m',
+  dim:   '\x1b[2m',
+  bold:  '\x1b[1m',
+  green: '\x1b[38;5;114m',
+  amber: '\x1b[38;5;215m',
+  red:   '\x1b[38;5;203m',
+  blue:  '\x1b[38;5;110m',
+};
+
+function say(s = '') { process.stdout.write(s + '\n'); }
+function write(s) { process.stdout.write(s); }
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+/* --- animacao de entrada -------------------------------------------------
+ * O mascote do OakOS e a bolota (a propria versao 0.1 se chama "Bolota",
+ * ver os-release) -- entao a entrada e ela brotando ate virar carvalho.
+ * Nao e so enfeite: o quadro final (a arvore) fica no cabecalho pra sempre,
+ * a animacao apenas "planta" ele na tela em vez de fazer ele aparecer do
+ * nada. Curta de proposito (< 1s) -- ninguem quer esperar isso toda hora
+ * que liga a maquina. */
+const MASCOT_STAGES = ['\u{1f330}', '\u{1f331}', '\u{1f33f}', '\u{1f333}']; // 🌰 🌱 🌿 🌳
+const MASCOT = MASCOT_STAGES[MASCOT_STAGES.length - 1];
+
+async function playIntro() {
+  // Sem TTY (saida redirecionada, por exemplo), animacao so teria custo,
+  // zero beneficio -- pula direto pro resultado final.
+  if (!process.stdout.isTTY) return;
+
+  write('\x1b[?25l'); // esconde o cursor -- ele piscando no meio do frame distrai
+  try {
+    const tones = [C.dim, C.dim, C.green, `${C.bold}${C.green}`];
+    for (let i = 0; i < MASCOT_STAGES.length; i++) {
+      write(`\r\x1b[K  ${tones[i]}${MASCOT_STAGES[i]}  crescendo o OakOS...${C.reset}`);
+      await sleep(160);
+    }
+    await sleep(220); // um instante parado na arvore cheia antes de seguir
+  } finally {
+    write('\r\x1b[K');
+    write('\x1b[?25h'); // cursor de volta, aconteca o que acontecer
+  }
+}
+
+/* --- diagnostico do ambiente -------------------------------------------- */
+
+function has(cmd) {
+  try {
+    execSync(`command -v ${cmd}`, { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function online() {
+  // Uma rota default existindo ja e um bom sinal, e nao custa um timeout de rede.
+  try {
+    return execSync('ip route show default', { encoding: 'utf8' }).trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function loggedIn() {
+  // O Claude Code guarda credenciais no home do usuario.
+  return fs.existsSync(`${os.homedir()}/.claude/.credentials.json`)
+      || fs.existsSync(`${os.homedir()}/.claude.json`);
+}
+
+function ideRunning() {
+  try {
+    execSync('systemctl is-active --quiet code-server');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function status() {
+  const net  = online();
+  const cli  = has('claude');
+  const auth = cli && loggedIn();
+  const ide  = has('code-server') && ideRunning();
+
+  const mark = (ok) => ok ? `${C.green}ok${C.reset}` : `${C.red}nao${C.reset}`;
+  say(`  rede      ${mark(net)}`);
+  say(`  claude    ${mark(cli)}`);
+  say(`  conta     ${mark(auth)}`);
+  say(`  ide       ${mark(ide)}${ide ? `  ${C.dim}http://localhost:8080${C.reset}` : ''}`);
+  return { net, cli, auth, ide };
+}
+
+/* --- acoes --------------------------------------------------------------- */
+
+function run(cmd, args, extraEnv) {
+  // stdio herdado: o programa filho assume o terminal por completo.
+  const env = extraEnv ? { ...process.env, ...extraEnv } : process.env;
+  return spawnSync(cmd, args, { stdio: 'inherit', env }).status;
+}
+
+function banner() {
+  const v = (() => {
+    try {
+      return (fs.readFileSync('/etc/os-release', 'utf8')
+        .match(/^VERSION="(.*)"$/m) || [, '?'])[1];
+    } catch { return '?'; }
+  })();
+
+  say();
+  say(`  ${MASCOT} ${C.green}${C.bold}OakOS${C.reset} ${C.dim}${v}${C.reset}`);
+  say(`  ${C.dim}kernel ${os.release()} · ${Math.round(os.totalmem() / 1e9)} GB${C.reset}`);
+  say();
+}
+
+const HELP = `
+  ${C.bold}Como usar${C.reset}
+
+  Escreva o que voce quer, em portugues mesmo, e de enter.
+  O pedido vai pro agente, que trabalha neste sistema.
+
+    ${C.dim}> crie um servidor http em go que responde a hora atual${C.reset}
+
+  ${C.bold}Comandos nativos${C.reset}
+
+    ${C.blue}login${C.reset}     conecta sua conta Claude a este sistema
+    ${C.blue}status${C.reset}    rede, agente, conta e IDE
+    ${C.blue}shell${C.reset}     cai no zsh (o Oak volta quando voce sair)
+    ${C.blue}sessoes${C.reset}   tmux -- varias janelas nesta mesma tela
+    ${C.blue}ajuda${C.reset}     esta tela
+    ${C.blue}desligar${C.reset}  encerra o sistema
+
+  ${C.bold}Mais de um Claude ao mesmo tempo${C.reset}
+
+  Pela IDE (abaixo) cada painel de terminal ja e independente -- abra
+  quantos quiser e rode ${C.blue}claude${C.reset} em cada um, um por projeto.
+
+  So no console (esta tela)? Digite ${C.blue}sessoes${C.reset}: abre o tmux, que
+  divide esta unica linha em varias janelas. ${C.dim}ctrl+b c${C.reset} cria uma
+  janela nova, ${C.dim}ctrl+b n${C.reset}/${C.dim}p${C.reset} alterna entre elas -- cada uma roda
+  ${C.blue}claude${C.reset} direto, sem passar pelo Oak.
+
+  ${C.bold}IDE${C.reset}
+
+  Um editor visual (code-server, com a extensao do Claude Code) roda em
+  segundo plano. Abra ${C.blue}http://localhost:8080${C.reset} no navegador do
+  seu computador -- a porta e encaminhada pelo QEMU automaticamente.
+`;
+
+function handle(line) {
+  const cmd = line.trim();
+  if (!cmd) return;
+
+  switch (cmd.toLowerCase()) {
+    case 'ajuda': case 'help': case '?':
+      say(HELP);
+      return;
+
+    case 'status':
+      say();
+      status();
+      say();
+      return;
+
+    case 'shell': case 'bash': case 'zsh':
+      // zsh e o shell de login do root; bash fica como opcao explicita.
+      // OAK_NO_SHELL=1 e essencial aqui: sem isso, o .zprofile do proprio
+      // shell que estamos abrindo relanca o oak de novo (login shell chama
+      // login shell), e 'shell' te devolve pro oak em vez de um shell de
+      // verdade. Achado testando de verdade, nao adivinhado.
+      say(`${C.dim}  (digite 'exit' pra voltar ao Oak)${C.reset}`);
+      run(cmd.toLowerCase() === 'bash' ? '/bin/bash' : '/bin/zsh', ['-l'], { OAK_NO_SHELL: '1' });
+      return;
+
+    case 'sessoes': case 'sessions': case 'tmux':
+      if (!has('tmux')) {
+        say(`${C.red}  tmux nao esta instalado.${C.reset}`);
+        return;
+      }
+      // OAK_NO_SHELL=1 aqui por um motivo especifico: testando de verdade,
+      // o tmux deste sistema tratou o painel como shell de LOGIN (o
+      // .zprofile disparou e relancou o oak dentro da propria janela do
+      // tmux -- animacao e tudo de novo). Em vez de depender do
+      // comportamento padrao do tmux (que varia), o servidor tmux herda
+      // essa variavel e repassa pros paineis, entao a trava funciona
+      // independente de login ou nao -- mesma solucao do 'shell' acima.
+      say(`${C.dim}  (ctrl+b c: nova janela · ctrl+b n/p: alterna · ctrl+b d: sai sem fechar)${C.reset}`);
+      run('tmux', ['new-session', '-A', '-s', 'oak'], { OAK_NO_SHELL: '1' });
+      return;
+
+    case 'login':
+      if (!has('claude')) {
+        say(`${C.red}  O Claude Code nao esta instalado.${C.reset}`);
+        say(`${C.dim}  Instale com: shell -> npm i -g @anthropic-ai/claude-code${C.reset}`);
+        return;
+      }
+      if (!online()) {
+        say(`${C.red}  Sem rede -- o login precisa de internet.${C.reset}`);
+        return;
+      }
+      run('claude', ['/login']);
+      return;
+
+    case 'desligar': case 'poweroff': case 'sair': case 'exit':
+      say(`${C.dim}  desligando...${C.reset}`);
+      run('systemctl', ['poweroff']);
+      return;
+  }
+
+  // Nao e comando nativo: e um pedido pro agente.
+  if (!has('claude')) {
+    say(`${C.red}  Agente indisponivel.${C.reset} ${C.dim}Digite 'ajuda'.${C.reset}`);
+    return;
+  }
+  run('claude', [cmd]);
+}
+
+/* --- laco principal ------------------------------------------------------ */
+
+async function main() {
+  await playIntro();
+  banner();
+  const st = status();
+  say();
+
+  if (!st.net) {
+    say(`  ${C.amber}Sem rede.${C.reset} ${C.dim}O agente precisa de internet pra funcionar.${C.reset}`);
+  } else if (!st.cli) {
+    say(`  ${C.amber}Agente ausente.${C.reset} ${C.dim}Digite 'shell' e instale o Claude Code.${C.reset}`);
+  } else if (!st.auth) {
+    say(`  ${C.amber}Conta nao conectada.${C.reset} ${C.dim}Digite 'login' pra comecar.${C.reset}`);
+  } else {
+    say(`  ${C.dim}Pronto. Descreva o que voce quer construir.${C.reset}`);
+    if (st.ide) {
+      say(`  ${C.dim}IDE em http://localhost:8080${C.reset}`);
+    }
+  }
+  say(`  ${C.dim}'ajuda' lista os comandos.${C.reset}`);
+  say();
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: `${C.green}oak${C.reset} ${C.dim}>${C.reset} `,
+  });
+
+  rl.prompt();
+  rl.on('line', (line) => {
+    handle(line);
+    rl.prompt();
+  });
+
+  // Ctrl+D nao deve derrubar voce pra lugar nenhum sem aviso.
+  rl.on('close', () => {
+    say(`\n${C.dim}  (Oak encerrado -- o console volta pro shell)${C.reset}`);
+    process.exit(0);
+  });
+}
+
+main().catch((err) => {
+  // Nunca deveria cair aqui (playIntro/banner/status nao rejeitam), mas se
+  // cair, melhor um erro visivel do que o console travado em silencio.
+  process.stderr.write(`oak: erro fatal: ${err && err.stack || err}\n`);
+  process.exit(1);
+});

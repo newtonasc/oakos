@@ -1,0 +1,7 @@
+PRETTY_NAME="OakOS 0.1 (Bolota)"
+NAME="OakOS"
+VERSION_ID="0.1"
+VERSION="0.1 (Bolota)"
+ID=oakos
+ID_LIKE=debian
+HOME_URL="https://github.com/newton/oakos"

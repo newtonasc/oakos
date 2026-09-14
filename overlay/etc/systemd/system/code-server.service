@@ -1,0 +1,21 @@
+[Unit]
+Description=code-server -- IDE web do OakOS
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+# 127.0.0.1: nao expomos a IDE pra rede nenhuma alem do proprio host QEMU.
+# --auth none porque e uma VM de dev local de usuario unico -- assim como o
+# root sem senha. O acesso de fora vem do hostfwd em run.sh, nao daqui.
+ExecStart=/usr/local/bin/code-server \
+    --bind-addr 127.0.0.1:8080 \
+    --auth none \
+    --disable-telemetry \
+    /root/workspace
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

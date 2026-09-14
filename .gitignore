@@ -1,0 +1,11 @@
+build/
+
+# Bootloader binario de terceiros (clone raso do repo oficial do Limine,
+# com .git proprio). Nao faz sentido vendorizar binario alheio no nosso
+# historico -- ver attic/bare-metal/README.md pra rebaixar.
+attic/bare-metal/limine/
+
+# ruido comum
+node_modules/
+*.log
+.DS_Store

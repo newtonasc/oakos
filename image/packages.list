@@ -1,0 +1,69 @@
+# Pacotes do sistema base do OakOS.
+# Regra: so entra aqui o que e necessario pro sistema bootar, ter rede,
+# e sustentar o agente. Tudo que for "conforto de desktop" fica de fora.
+
+# --- nucleo ---
+systemd-sysv          # systemd como init (PID 1)
+linux-image-amd64     # o kernel Linux
+udev                  # popula /dev conforme o hardware aparece
+dbus                  # barramento de IPC que o systemd usa
+
+# --- rede e tempo ---
+systemd-resolved      # resolucao DNS
+systemd-timesyncd     # NTP -- sem hora certa, TLS falha na validacao do cert
+iproute2              # ip(8)
+iputils-ping          # diagnostico basico
+ca-certificates       # cadeia de CAs raiz, necessaria pra HTTPS
+gnupg                 # verifica a chave do repositorio do Docker (ver abaixo)
+
+# --- runtime do agente ---
+# Node/npm NAO estao aqui -- o Debian trava numa LTS velha (20.x nesta
+# suite), e o proprio Claude Code ja exige >=22. O chroot-setup.sh baixa o
+# tarball oficial da LTS atual direto de nodejs.org, com checagem de sha256,
+# igual ao code-server: binario pronto, sem repositorio de terceiros.
+git                   # o agente vive de versionar codigo
+ripgrep               # busca rapida; o Claude Code usa
+
+# --- IDE e navegador ---
+# code-server (o VS Code que roda no navegador) vem instalado por script no
+# chroot-setup.sh, nao por apt -- nao e um pacote Debian. Chromium sim,
+# esse e de repositorio normal.
+chromium              # motor de navegador. Roda --headless: o agente usa
+                      # pra abrir paginas, tirar screenshot, testar UI que
+                      # ele mesmo escreveu. Nao e um navegador de desktop --
+                      # nao ha desktop aqui. O Playwright (via npm, ver
+                      # chroot-setup.sh) e quem o comanda.
+
+# --- containers ---
+# O Docker Engine e o plugin 'docker compose' NAO estao aqui -- o Debian so
+# empacota uma versao antiga (docker.io). Vem do repositorio oficial da
+# Docker Inc., adicionado e instalado no chroot-setup.sh, do mesmo jeito
+# que o code-server.
+
+# --- ferramentas de equipe ---
+# acli (CLI oficial da Atlassian, Jira) e npm i -g typescript/tsx nao estao
+# aqui -- vem por script/npm no chroot-setup.sh. Bitbucket nao tem CLI
+# oficial da Atlassian (confirmado: acli cobre so Jira) -- fica por git puro
+# mesmo, com chave SSH ou app password configurada uma vez.
+
+# --- banco de dados ---
+# So o cliente (psql + libpq), nao um servidor Postgres rodando o tempo
+# todo. Cada projeto deveria trazer o Postgres dele via docker compose,
+# na versao que ele pede -- assim 3 projetos com requisitos diferentes de
+# versao nao pisam um no outro. O psql serve pra conectar em qualquer um
+# deles (ou em algo remoto) sem entrar dentro do container.
+postgresql-client
+
+# --- shell interativo ---
+zsh                   # shell de login do root (ver chroot-setup.sh)
+tmux                  # multiplexa o console serial (1 linha) em varias
+                      # sessoes -- assim da pra ter mais de um 'claude'
+                      # rodando ao mesmo tempo sem passar pela IDE. Paineis
+                      # do tmux abrem shell NAO-login por padrao, entao nao
+                      # caem na armadilha do .zprofile relancando o oak.
+
+# --- utilidades minimas de sobrevivencia ---
+e2fsprogs             # fsck da raiz
+less
+nano
+curl
