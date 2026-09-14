@@ -21,6 +21,11 @@ echo
 
 mkdir -p build
 
+# HOME=/root explicito no customize-hook abaixo: 'chroot' nao reseta o
+# ambiente sozinho, entao sem isso o chroot-setup.sh herda o $HOME de quem
+# rodou 'make' no host (ex: /home/newtonasc). Passou despercebido ate o
+# passo do Herdr, que checa "$HOME/.claude" na hora de instalar a
+# integracao -- achado rodando de verdade, nao suposto.
 mmdebstrap \
     --mode=unshare \
     --variant=minbase \
@@ -30,7 +35,7 @@ mmdebstrap \
     --aptopt='Acquire::Retries "3"' \
     --customize-hook='tar -C overlay -cf - . | tar -C "$1" -xf -' \
     --customize-hook='cp image/chroot-setup.sh "$1/tmp/"' \
-    --customize-hook="chroot \"\$1\" env OAK_SUITE=$SUITE bash /tmp/chroot-setup.sh" \
+    --customize-hook="chroot \"\$1\" env HOME=/root OAK_SUITE=$SUITE bash /tmp/chroot-setup.sh" \
     --customize-hook='rm -f "$1/tmp/chroot-setup.sh"' \
     "$SUITE" "$OUT" "$MIRROR"
 

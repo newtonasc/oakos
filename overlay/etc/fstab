@@ -1,1 +1,20 @@
-/dev/vda  /  ext4  defaults,noatime  0  1
+# LABEL, nao /dev/vda: no boot rapido do QEMU (-kernel/-initrd, ver run.sh)
+# a raiz E o disco inteiro, sem particao. Na imagem auto-bootavel (ver
+# image/build-bootable.sh) a raiz e uma particao dentro de um disco GPT com
+# ESP, entao vira /dev/vda2 -- LABEL=OAKOS resolve certo nos dois casos.
+LABEL=OAKOS  /  ext4  defaults,noatime  0  1
+
+# Disco de dados persistente (build/oakos-data.ext4 no host, ver
+# image/build-data.sh) -- sobrevive a 'make clean'/rebuild da imagem, ao
+# contrario da raiz acima. 'nofail' nos tres: um boot sem o segundo disco
+# anexado (ex: run.sh antigo, ou alguem chamando o qemu na mao) nao trava
+# esperando por ele -- so fica sem persistencia.
+#
+# x-systemd.requires-mounts-for=/mnt/data nos binds: sem isso, nada garante
+# que /mnt/data (a ORIGEM dos binds) ja esteja montado antes -- o systemd
+# so infere essa ordem automaticamente quando o destino fica dentro de
+# outro ponto de montagem, que nao e o caso aqui (destino e /root/...).
+LABEL=OAKDATA            /mnt/data                     ext4  defaults,noatime,nofail                                0  2
+/mnt/data/workspace      /root/workspace               none  bind,nofail,x-systemd.requires-mounts-for=/mnt/data     0  0
+/mnt/data/claude         /root/.claude                 none  bind,nofail,x-systemd.requires-mounts-for=/mnt/data     0  0
+/mnt/data/config/code-server /root/.config/code-server none  bind,nofail,x-systemd.requires-mounts-for=/mnt/data     0  0

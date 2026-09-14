@@ -16,6 +16,13 @@ for f in build/vmlinuz build/initrd.img build/oakos.ext4; do
     [ -f "$f" ] || { echo "!! falta $f -- rode 'make' primeiro"; exit 1; }
 done
 
+# Disco de dados persistente (workspace + conta Claude): criado uma vez so,
+# nunca apagado por 'make'/'make clean'. Chamado direto aqui (nao so pelo
+# 'make data') pra quem roda './run.sh' sem passar pelo Makefile tambem
+# ganhar persistencia -- o script e idempotente, nao custa nada se o
+# arquivo ja existe.
+image/build-data.sh
+
 # KVM da velocidade quase nativa, mas so se tivermos permissao no /dev/kvm.
 # Sem ele o QEMU emula por software (TCG): funciona, so e mais lento.
 #
@@ -71,6 +78,7 @@ exec qemu-system-x86_64 \
     -initrd build/initrd.img \
     -append "$CMDLINE" \
     -drive file=build/oakos.ext4,if=virtio,format=raw \
+    -drive file=build/oakos-data.ext4,if=virtio,format=raw \
     -netdev "$NETDEV" \
     -device virtio-net-pci,netdev=net0 \
     -nographic

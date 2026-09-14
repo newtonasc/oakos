@@ -97,6 +97,20 @@ function ideRunning() {
   }
 }
 
+function idePassword() {
+  // O code-server gera essa senha sozinho no primeiro boot (sem --auth
+  // none no service, ver overlay/etc/systemd/system/code-server.service) e
+  // grava aqui. O diretorio inteiro esta no disco de dados persistente,
+  // entao a senha e a mesma entre reinicios e rebuilds -- nao muda a
+  // cada boot.
+  try {
+    const cfg = fs.readFileSync(`${os.homedir()}/.config/code-server/config.yaml`, 'utf8');
+    return (cfg.match(/^password:\s*(.+)$/m) || [, null])[1];
+  } catch {
+    return null;
+  }
+}
+
 function status() {
   const net  = online();
   const cli  = has('claude');
@@ -108,6 +122,10 @@ function status() {
   say(`  claude    ${mark(cli)}`);
   say(`  conta     ${mark(auth)}`);
   say(`  ide       ${mark(ide)}${ide ? `  ${C.dim}http://localhost:8080${C.reset}` : ''}`);
+  if (ide) {
+    const pw = idePassword();
+    if (pw) say(`              ${C.dim}senha: ${pw}${C.reset}`);
+  }
   return { net, cli, auth, ide };
 }
 
@@ -146,7 +164,7 @@ const HELP = `
     ${C.blue}login${C.reset}     conecta sua conta Claude a este sistema
     ${C.blue}status${C.reset}    rede, agente, conta e IDE
     ${C.blue}shell${C.reset}     cai no zsh (o Oak volta quando voce sair)
-    ${C.blue}sessoes${C.reset}   tmux -- varias janelas nesta mesma tela
+    ${C.blue}sessoes${C.reset}   Herdr -- sessao de agente que sobrevive a desconexao
     ${C.blue}ajuda${C.reset}     esta tela
     ${C.blue}desligar${C.reset}  encerra o sistema
 
@@ -155,10 +173,10 @@ const HELP = `
   Pela IDE (abaixo) cada painel de terminal ja e independente -- abra
   quantos quiser e rode ${C.blue}claude${C.reset} em cada um, um por projeto.
 
-  So no console (esta tela)? Digite ${C.blue}sessoes${C.reset}: abre o tmux, que
-  divide esta unica linha em varias janelas. ${C.dim}ctrl+b c${C.reset} cria uma
-  janela nova, ${C.dim}ctrl+b n${C.reset}/${C.dim}p${C.reset} alterna entre elas -- cada uma roda
-  ${C.blue}claude${C.reset} direto, sem passar pelo Oak.
+  So no console (esta tela)? Digite ${C.blue}sessoes${C.reset} (ou ${C.blue}agentes${C.reset}):
+  abre o Herdr, que mantem a sessao do ${C.blue}claude${C.reset} rodando mesmo se voce
+  fechar o terminal, e acompanha se o agente esta parado, trabalhando ou
+  bloqueado. ${C.dim}prefix+q ou fechar o terminal: sai sem encerrar a sessao.${C.reset}
 
   ${C.bold}IDE${C.reset}
 
@@ -192,20 +210,33 @@ function handle(line) {
       run(cmd.toLowerCase() === 'bash' ? '/bin/bash' : '/bin/zsh', ['-l'], { OAK_NO_SHELL: '1' });
       return;
 
-    case 'sessoes': case 'sessions': case 'tmux':
-      if (!has('tmux')) {
-        say(`${C.red}  tmux nao esta instalado.${C.reset}`);
+    case 'sessoes': case 'sessions': case 'agentes': case 'herdr':
+      // Sessao de agente via Herdr (herdr.dev) -- estado sobrevive a
+      // desconexao (fechar o terminal nao mata o 'claude' rodando dentro),
+      // e o herdr acompanha se o agente esta idle/working/blocked em vez
+      // de so multiplexar a tela. Substituiu o tmux aqui: era o workaround
+      // anterior pra mais de um 'claude' ao mesmo tempo no console cru,
+      // sem o estado sobrevivendo a desconexao.
+      if (!has('herdr')) {
+        say(`${C.red}  Herdr nao esta instalado.${C.reset}`);
         return;
       }
-      // OAK_NO_SHELL=1 aqui por um motivo especifico: testando de verdade,
-      // o tmux deste sistema tratou o painel como shell de LOGIN (o
-      // .zprofile disparou e relancou o oak dentro da propria janela do
-      // tmux -- animacao e tudo de novo). Em vez de depender do
-      // comportamento padrao do tmux (que varia), o servidor tmux herda
-      // essa variavel e repassa pros paineis, entao a trava funciona
-      // independente de login ou nao -- mesma solucao do 'shell' acima.
-      say(`${C.dim}  (ctrl+b c: nova janela · ctrl+b n/p: alterna · ctrl+b d: sai sem fechar)${C.reset}`);
-      run('tmux', ['new-session', '-A', '-s', 'oak'], { OAK_NO_SHELL: '1' });
+      // A integracao com o Claude Code (deteccao de estado por hook, em
+      // vez de so ler a tela) exige que ~/.claude ja exista -- e isso so
+      // acontece depois que o 'claude' roda pela primeira vez. No build da
+      // imagem esse diretorio nunca existe, entao a instalacao so pode
+      // acontecer aqui, em runtime. Idempotente e silenciosa: o herdr nao
+      // reclama se ja estiver instalada, e no pior caso (ainda sem
+      // ~/.claude) simplesmente nao faz nada -- o 'agentes' funciona do
+      // mesmo jeito, so com deteccao de tela em vez de hooks.
+      if (fs.existsSync(`${os.homedir()}/.claude`)) {
+        spawnSync('herdr', ['integration', 'install', 'claude'], { stdio: 'ignore' });
+      }
+      // Mesma trava do 'sessoes': sem OAK_NO_SHELL=1 o painel que o herdr
+      // abre roda um shell de login, que relanca o oak dentro do proprio
+      // painel do herdr.
+      say(`${C.dim}  (prefix+q ou fechar o terminal: sai sem encerrar a sessao)${C.reset}`);
+      run('herdr', [], { OAK_NO_SHELL: '1' });
       return;
 
     case 'login':

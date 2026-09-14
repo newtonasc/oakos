@@ -7,6 +7,12 @@ systemd-sysv          # systemd como init (PID 1)
 linux-image-amd64     # o kernel Linux
 udev                  # popula /dev conforme o hardware aparece
 dbus                  # barramento de IPC que o systemd usa
+systemd-boot-efi       # binario do systemd-boot (usr/lib/systemd/boot/efi/*.efi)
+                        # -- o build-bootable.sh extrai daqui pra montar a
+                        # ESP. O 'bootctl' correspondente ja vem com o
+                        # systemd-sysv; dentro da VM ele consegue atualizar
+                        # a propria entrada de boot depois (ex: kernel novo
+                        # via apt), sem depender do host que gerou a imagem.
 
 # --- rede e tempo ---
 systemd-resolved      # resolucao DNS
@@ -56,11 +62,11 @@ postgresql-client
 
 # --- shell interativo ---
 zsh                   # shell de login do root (ver chroot-setup.sh)
-tmux                  # multiplexa o console serial (1 linha) em varias
-                      # sessoes -- assim da pra ter mais de um 'claude'
-                      # rodando ao mesmo tempo sem passar pela IDE. Paineis
-                      # do tmux abrem shell NAO-login por padrao, entao nao
-                      # caem na armadilha do .zprofile relancando o oak.
+
+# tmux NAO esta aqui -- foi substituido pelo Herdr (comando 'sessoes' do
+# oak) como multiplexador do console serial: mesma ideia (varios 'claude'
+# ao mesmo tempo sem passar pela IDE), mas com sessao que sobrevive a
+# desconexao. O Herdr vem por script no chroot-setup.sh, nao por apt.
 
 # --- utilidades minimas de sobrevivencia ---
 e2fsprogs             # fsck da raiz

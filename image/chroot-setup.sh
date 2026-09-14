@@ -65,6 +65,30 @@ npm install -g --unsafe-perm @anthropic-ai/claude-code || {
     echo "!! da pra instalar depois, dentro da VM, com: npm i -g @anthropic-ai/claude-code"
 }
 
+echo ">> instalando o Herdr"
+# Runtime de sessoes de agente (https://herdr.dev): mantem o 'claude' vivo
+# em background, sobrevivendo a desconexao, com deteccao de estado
+# (idle/working/blocked). E quem sustenta o comando 'sessoes' do oak --
+# substituiu o tmux (avaliado e comparado lado a lado antes da troca).
+#
+# Binario estatico, sem servico systemd -- o proprio 'herdr' sobe o daemon
+# na primeira chamada. HERDR_INSTALL_DIR=/usr/local/bin em vez do
+# $HOME/.local/bin padrao do instalador: aqui dentro root nao tem uma
+# sessao de login "normal" que garanta esse PATH, e /usr/local/bin ja e
+# onde o code-server e o docker-compose shim vivem.
+HERDR_INSTALL_DIR=/usr/local/bin bash -c 'curl -fsSL https://herdr.dev/install.sh | sh' || {
+    echo "!! falhou instalar o Herdr (sem rede no chroot?)"
+}
+
+# 'herdr integration install claude' NAO roda aqui de proposito: ele exige
+# que ~/.claude ja exista, e esse diretorio so aparece depois que o
+# 'claude' roda pela primeira vez -- o que nunca acontece durante o build
+# da imagem (sem TTY, sem login). Rodar aqui falharia sempre. Quem instala
+# a integracao, de fato, e o comando 'sessoes' do oak, na primeira vez que
+# achar ~/.claude presente dentro da VM (achado rodando o build de
+# verdade, nao suposto: a tentativa aqui falhava com "claude directory
+# not found").
+
 echo ">> instalando o code-server (IDE)"
 # --method=standalone: baixa o binario pronto do GitHub e nao chama systemctl
 # em lugar nenhum -- funciona dentro de um chroot sem PID 1 de verdade, que e
@@ -75,15 +99,23 @@ curl -fsSL https://code-server.dev/install.sh | sh -s -- \
     echo "!! falhou instalar o code-server (sem rede no chroot?)"
 }
 
-if command -v code-server >/dev/null; then
-    mkdir -p /root/workspace
-    cat > /root/workspace/README.md <<'MSG'
+# /root/workspace, /root/.claude e /root/.config/code-server precisam
+# existir como diretorios reais na imagem, mesmo vazios: sao os PONTOS DE
+# MONTAGEM dos binds pro disco de dados persistente (ver overlay/etc/fstab
+# e image/build-data.sh). Sem essa pasta aqui, o bind mount de boot nao tem
+# onde grudar. Incondicional -- nao depende do code-server ter instalado
+# certo.
+mkdir -p /root/workspace /root/.claude /root/.config/code-server
+cat > /root/workspace/README.md <<'MSG'
 # workspace
 
-Pasta padrao aberta pelo code-server. O que voce criar aqui sobrevive a
-reinicios da VM (faz parte do disco da imagem).
+Pasta padrao aberta pelo code-server. Normalmente isto e so um fallback:
+o disco de dados persistente (ver 'Estrutura' no README do projeto) fica
+montado por cima, e o que voce ve aqui de verdade sobrevive a rebuilds da
+imagem -- nao so a reinicios.
 MSG
 
+if command -v code-server >/dev/null; then
     # A extensao oficial do Claude Code, publicada pela propria Anthropic no
     # Open VSX (o registro que o code-server usa -- nao e a marketplace da
     # Microsoft). Mostra diffs inline e integra o agente ao editor.
