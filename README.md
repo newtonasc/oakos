@@ -1,5 +1,7 @@
 # OakOS
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Um sistema operacional onde **o agente é a interface**.
 
 Não há desktop, não há gerenciador de arquivos, não há um terminal esperando
