@@ -1,0 +1,18 @@
+[Unit]
+Description=Chromium headful -- aberto na tela virtual pra ver apps rodando na VM
+After=wm.service
+Requires=wm.service
+
+[Service]
+Type=simple
+Environment=DISPLAY=:0
+# --no-sandbox: obrigatorio rodando como root (Chromium recusa o sandbox de
+# namespaces nesse caso e sai de cara sem essa flag). about:blank: sem
+# depender de rede pra abrir -- navegue pra onde quiser depois de conectar
+# (ex: localhost:3000, um projeto rodando na propria VM).
+ExecStart=/usr/bin/chromium --no-sandbox --start-maximized about:blank
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+[Unit]
+Description=fluxbox -- window manager leve do display virtual (Xvfb)
+After=xvfb.service
+Requires=xvfb.service
+
+[Service]
+Type=simple
+Environment=DISPLAY=:0
+ExecStart=/usr/bin/fluxbox
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

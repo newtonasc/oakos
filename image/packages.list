@@ -36,9 +36,11 @@ ripgrep               # busca rapida; o Claude Code usa
 # esse e de repositorio normal.
 chromium              # motor de navegador. Roda --headless: o agente usa
                       # pra abrir paginas, tirar screenshot, testar UI que
-                      # ele mesmo escreveu. Nao e um navegador de desktop --
-                      # nao ha desktop aqui. O Playwright (via npm, ver
-                      # chroot-setup.sh) e quem o comanda.
+                      # ele mesmo escreveu -- o Playwright (via npm, ver
+                      # chroot-setup.sh) e quem o comanda. O mesmo binario
+                      # tambem abre headful (janela de verdade) na tela
+                      # virtual sob demanda -- ver bloco "tela virtual"
+                      # abaixo.
 
 # --- acesso remoto ---
 openssh-server        # ssh pra dentro da VM -- alternativa ao console serial
@@ -50,13 +52,16 @@ openssh-server        # ssh pra dentro da VM -- alternativa ao console serial
 # --- tela virtual (VNC) ---
 # Excecao deliberada a regra do topo: existe pra rodar coisa que precisa de
 # uma janela de verdade (o prototipo de IDE estilo Cursor, em Electron; o
-# Chrome do Playwright em modo headful em vez de headless). Nao e um
-# desktop -- sem Xorg/Wayland, sem compositor, sem gerenciador de janelas.
-# So um framebuffer virtual (Xvfb) exposto por VNC/navegador (x11vnc +
-# noVNC), ligado sob demanda pelo comando 'tela' do oak, nunca no boot (ver
-# overlay/etc/systemd/system/{xvfb,x11vnc,novnc}.service -- nenhum deles e
-# 'enabled', so 'start' explicito).
+# Chrome do Playwright em modo headful em vez de headless; ou so navegar
+# visualmente num app que esta rodando na propria VM). Framebuffer virtual
+# (Xvfb) + WM leve (fluxbox, so pra janela abrir maximizada e ter foco --
+# sem barra de tarefas, sem decoracao pesada) + o mesmo chromium do bloco
+# acima, agora headful. Exposto por VNC/navegador (x11vnc + noVNC), ligado
+# sob demanda pelo comando 'tela' do oak, nunca no boot (ver
+# overlay/etc/systemd/system/{xvfb,wm,browser,x11vnc,novnc}.service --
+# nenhum deles e 'enabled', so 'start' explicito).
 xvfb                  # framebuffer X virtual, sem GPU
+fluxbox               # window manager leve pro display do Xvfb
 x11vnc                # serve o display do Xvfb por VNC
 novnc                 # cliente VNC em HTML/JS (abre no navegador do host)
 websockify             # ponte WebSocket <-> VNC que o noVNC usa por baixo
