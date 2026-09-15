@@ -24,15 +24,16 @@ normal a bash, git, docker, o que precisar.
 
 ## Comandos nativos
 
-Só estes seis têm tratamento especial. Qualquer outra coisa digitada,
+Só estes sete têm tratamento especial. Qualquer outra coisa digitada,
 mesmo que pareça um comando de shell (`ls`, `curl`, `docker ps`),
 vira pedido pro agente, não execução direta.
 
 | Comando | O que faz |
 |---|---|
 | `login` | conecta a conta Claude a esta VM (`claude /login`) |
-| `status` | mostra rede, agente, conta e IDE |
+| `status` | mostra rede, agente, conta, IDE e tela |
 | `shell` | cai num zsh de verdade, sem o Oak no meio |
+| `tela` (ou `gui`/`vnc`) | liga a tela virtual (janela de verdade via VNC/navegador) |
 | `sessoes` (ou `agentes`) | abre o Herdr, pra rodar mais de um `claude` ao mesmo tempo |
 | `ajuda` | esta lista, direto no console |
 | `desligar` | encerra a VM |
@@ -43,7 +44,9 @@ também desligam.
 ## `shell`: acesso direto, sem o agente
 
 `git clone`, `docker compose up`, `npm install`: qualquer coisa que você
-já sabe fazer de cor roda ali direto.
+já sabe fazer de cor roda ali direto. Além do básico (git, docker), já vêm
+instalados `python3` (com `venv`/`pip`), `build-essential` (gcc/make, pra
+dependência nativa de pacote npm), `jq` e `zip`/`unzip`.
 
 ```
 oak > shell
@@ -86,7 +89,53 @@ oak > status
   conta     ok
   ide       ok  http://localhost:8080
               senha: <sua senha aqui>
+  tela      nao
+              digite 'tela' pra ligar
 ```
+
+## Tela virtual: rodar algo com janela de verdade
+
+Não há desktop na VM, mas alguma coisa às vezes precisa mesmo de uma
+janela: um app Electron, o Chromium sem `--headless` pra ver o que ele está
+renderizando. Pra isso existe `tela`:
+
+```
+oak > tela
+  Tela ligada.
+  http://localhost:6080/vnc.html
+  senha: <gerada na primeira vez>
+```
+
+Abra a URL no navegador do seu computador (a porta `6080` é encaminhada
+pelo QEMU, igual a IDE) e entre com a senha. Você cai direto no Chromium,
+já aberto e maximizado -- navegue pra onde quiser, inclusive num projeto
+seu rodando na própria VM (`localhost:3000`, por exemplo).
+
+Fica desligada por padrão pra não gastar RAM à toa. A senha é gerada na
+primeira vez que você liga, fica guardada no disco de dados (sobrevive a
+reinícios e rebuilds), e `status` sempre mostra qual é enquanto a tela
+estiver ligada.
+
+## Acesso por SSH
+
+```bash
+ssh -p 2222 root@localhost
+```
+
+`run.sh` encaminha a porta `2222` do host pra `22` da VM. O SSH já sobe
+sozinho no boot, mas só aceita chave pública -- o root não tem senha, então
+sem uma chave configurada, ninguém entra. Pra configurar a sua, dentro da
+VM (via console ou `shell`):
+
+```bash
+mkdir -p /root/.ssh
+echo "ssh-ed25519 AAAA... voce@sua-maquina" >> /root/.ssh/authorized_keys
+```
+
+`/root/.ssh` não está no disco de dados persistente: some a cada `make`
+(rebuild do sistema) e precisa ser adicionada de novo. Útil como
+alternativa ao console serial quando o QEMU não está aberto na sua frente
+(ex: outro terminal, outra máquina na mesma rede).
 
 ## O que sobrevive e o que não
 
@@ -95,10 +144,12 @@ A VM roda em dois discos separados:
 - **O sistema** (`build/oakos.ext4`): recriado do zero a cada `make`.
   Nada que você mudar fora das pastas abaixo sobrevive a um rebuild.
 - **Os dados** (`build/oakos-data.ext4`): nunca é apagado por
-  `make`/`make clean`. Guarda três coisas, montadas por bind:
+  `make`/`make clean`. Guarda quatro coisas, montadas por bind:
   - `/root/workspace`: a pasta que a IDE abre por padrão
   - `/root/.claude`: sua conta Claude logada
   - `/root/.config/code-server`: a senha da IDE
+  - `/root/.config/x11vnc`: a senha da tela virtual
+  - (`/root/.ssh` **não** está nessa lista -- ver "Acesso por SSH" acima)
 
 Precisa que alguma coisa sobreviva sempre? Coloque em
 `image/chroot-setup.sh`, não instale na mão dentro da VM.

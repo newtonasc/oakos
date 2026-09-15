@@ -106,15 +106,34 @@ ESP ou swap. O bind mount (via `overlay/etc/fstab`) é o que faz caminhos como
 `/root/workspace` apontarem pro disco de dados sem o resto do sistema
 precisar saber disso.
 
-**zsh como shell de login, mas sem desktop nenhum.** O `oak` roda em cima de
-um terminal comum (serial + tty): não há Xorg, Wayland ou compositor. A IDE e
-o navegador do sistema são o **code-server** (VS Code no navegador) e o
-**Chromium headless**, comandado por **Playwright**: o agente pode abrir
-páginas, esperar elementos e tirar screenshot do que ele mesmo construiu, sem
-que isso exija uma pilha gráfica dentro da VM. Se um dia fizer sentido um
-desktop de verdade (Wayland + compositor), é uma decisão à parte: bem mais
-cara em complexidade e tamanho de imagem, e destoa da premissa de "sem
-desktop" do projeto.
+**zsh como shell de login, sem desktop no boot.** O `oak` roda em cima de um
+terminal comum (serial + tty): não há Xorg, Wayland ou compositor ligados por
+padrão. A IDE e o navegador do sistema são o **code-server** (VS Code no
+navegador) e o **Chromium headless**, comandado por **Playwright**: o agente
+pode abrir páginas, esperar elementos e tirar screenshot do que ele mesmo
+construiu.
+
+Quando algo precisa mesmo de uma janela (um app Electron, o próprio Chromium
+sem `--headless`), existe o comando `tela`: liga um framebuffer virtual
+(**Xvfb**) com um window manager leve (**fluxbox**, só pra abrir janela
+maximizada, sem decoração pesada) e o mesmo Chromium agora headful, servidos
+por VNC/navegador (**x11vnc** + **noVNC**). Fica desligado até alguém pedir,
+para não pesar RAM em toda VM que nunca usa tela gráfica (ver
+`overlay/etc/systemd/system/{xvfb,wm,browser,x11vnc,novnc}.service`, nenhum
+`enabled`).
+
+Não é um desktop: sem barra de tarefas, sem múltiplas janelas coordenadas,
+sem nada além do que uma janela precisa pra existir. Um desktop de verdade
+(Wayland + compositor completo) continua sendo uma decisão à parte: bem mais
+cara em complexidade e tamanho de imagem.
+
+**SSH sempre ligado, só por chave pública.** `openssh-server` sobe no boot
+(`systemctl enable ssh`), mas como o root não tem senha (ver abaixo),
+`PasswordAuthentication no` faz da chave pública o único jeito de entrar: sem
+nenhuma configurada, ninguém acessa. `run.sh` encaminha a porta `2222` do
+host pra `22` da VM (`ssh -p 2222 root@localhost`) -- serve de alternativa
+ao console serial quando o QEMU não está aberto na sua frente. Ver
+`overlay/etc/ssh/sshd_config.d/oakos.conf`.
 
 **`attic/bare-metal/`** guarda um kernel x86_64 escrito do zero (Limine,
 framebuffer, serial). Foi o começo do projeto, antes de ficar claro que o
@@ -148,6 +167,13 @@ compose` prontos pra orquestrar múltiplos projetos.
 só por `image/build-data.sh`) guarda o workspace, a conta Claude logada e a
 senha da IDE: sobrevive tanto a reinícios quanto a `make clean`/rebuild da
 imagem do sistema, que é recriada do zero a cada `make`.
+
+**Acesso e ferramentas de dev:** SSH sempre ligado, só por chave pública (ver
+"Decisões tomadas" acima). Ferramentas nativas via `apt`: `build-essential`
+(gcc/make), `python3` (+ `venv`/`pip`), `jq`, `zip`/`unzip`.
+
+**Tela virtual:** desligada por padrão, liga sob demanda com o comando
+`tela` dentro da VM. Ver "Decisões tomadas" acima.
 
 **Mais de um Claude ao mesmo tempo:** pela IDE já funciona sem nada especial:
 cada painel de terminal do code-server é um zsh comum, independente do
