@@ -97,6 +97,27 @@ function ideRunning() {
   }
 }
 
+function telaRunning() {
+  try {
+    execSync('systemctl is-active --quiet novnc');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function telaPassword() {
+  // Texto puro, gerado pelo x11vnc.service na primeira vez que sobe (ver
+  // overlay/etc/systemd/system/x11vnc.service) -- o formato que o proprio
+  // x11vnc usa pra autenticar (arquivo 'passwd' irmao deste) e ofuscado,
+  // nao da pra ler de volta.
+  try {
+    return fs.readFileSync(`${os.homedir()}/.config/x11vnc/password.txt`, 'utf8').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 function idePassword() {
   // O code-server gera essa senha sozinho no primeiro boot (sem --auth
   // none no service, ver overlay/etc/systemd/system/code-server.service) e
@@ -116,6 +137,7 @@ function status() {
   const cli  = has('claude');
   const auth = cli && loggedIn();
   const ide  = has('code-server') && ideRunning();
+  const tela = has('websockify') && telaRunning();
 
   const mark = (ok) => ok ? `${C.green}ok${C.reset}` : `${C.red}nao${C.reset}`;
   say(`  rede      ${mark(net)}`);
@@ -126,7 +148,14 @@ function status() {
     const pw = idePassword();
     if (pw) say(`              ${C.dim}senha: ${pw}${C.reset}`);
   }
-  return { net, cli, auth, ide };
+  say(`  tela      ${mark(tela)}${tela ? `  ${C.dim}http://localhost:6080/vnc.html${C.reset}` : ''}`);
+  if (tela) {
+    const pw = telaPassword();
+    if (pw) say(`              ${C.dim}senha: ${pw}${C.reset}`);
+  } else {
+    say(`              ${C.dim}digite 'tela' pra ligar${C.reset}`);
+  }
+  return { net, cli, auth, ide, tela };
 }
 
 /* --- acoes --------------------------------------------------------------- */
@@ -162,8 +191,9 @@ const HELP = `
   ${C.bold}Comandos nativos${C.reset}
 
     ${C.blue}login${C.reset}     conecta sua conta Claude a este sistema
-    ${C.blue}status${C.reset}    rede, agente, conta e IDE
+    ${C.blue}status${C.reset}    rede, agente, conta, IDE e tela
     ${C.blue}shell${C.reset}     cai no zsh (o Oak volta quando voce sair)
+    ${C.blue}tela${C.reset}      liga a tela virtual (VNC/navegador) sob demanda
     ${C.blue}sessoes${C.reset}   Herdr -- sessao de agente que sobrevive a desconexao
     ${C.blue}ajuda${C.reset}     esta tela
     ${C.blue}desligar${C.reset}  encerra o sistema
@@ -183,6 +213,12 @@ const HELP = `
   Um editor visual (code-server, com a extensao do Claude Code) roda em
   segundo plano. Abra ${C.blue}http://localhost:8080${C.reset} no navegador do
   seu computador -- a porta e encaminhada pelo QEMU automaticamente.
+
+  ${C.bold}Tela${C.reset}
+
+  Pra rodar algo que precisa de uma janela de verdade -- um app Electron,
+  o Chrome do Playwright sem ${C.dim}--headless${C.reset} -- digite ${C.blue}tela${C.reset}.
+  Ela fica desligada por padrao pra nao gastar RAM a toa.
 `;
 
 function handle(line) {
@@ -208,6 +244,26 @@ function handle(line) {
       // verdade. Achado testando de verdade, nao adivinhado.
       say(`${C.dim}  (digite 'exit' pra voltar ao Oak)${C.reset}`);
       run(cmd.toLowerCase() === 'bash' ? '/bin/bash' : '/bin/zsh', ['-l'], { OAK_NO_SHELL: '1' });
+      return;
+
+    case 'tela': case 'gui': case 'grafico': case 'vnc':
+      // Xvfb/x11vnc/novnc nao sao 'enabled' (ver packages.list e os
+      // .service em overlay/etc/systemd/system) -- ficam parados ate
+      // alguem pedir, pra nao pesar RAM em toda VM que nunca usa tela
+      // grafica. 'systemctl start' aqui sobe os tres (a cadeia
+      // Requires= cuida da ordem) so na primeira vez que for preciso.
+      if (!has('websockify')) {
+        say(`${C.red}  Tela virtual nao instalada nesta imagem.${C.reset}`);
+        return;
+      }
+      if (run('systemctl', ['start', 'xvfb', 'x11vnc', 'novnc']) !== 0) {
+        say(`${C.red}  Falha ao ligar a tela -- 'journalctl -u x11vnc -u novnc' pra detalhes.${C.reset}`);
+        return;
+      }
+      say(`${C.dim}  Tela ligada.${C.reset}`);
+      say(`  http://localhost:6080/vnc.html`);
+      const pw = telaPassword();
+      if (pw) say(`  ${C.dim}senha: ${pw}${C.reset}`);
       return;
 
     case 'sessoes': case 'sessions': case 'agentes': case 'herdr':

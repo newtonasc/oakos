@@ -51,21 +51,29 @@ CMDLINE="root=/dev/vda rw console=tty0 console=ttyS0,115200 quiet ${OAK_CMDLINE:
 # nome de servico, se estiverem no mesmo docker compose) -- essa lista nao
 # afeta em nada a comunicacao entre eles.
 #
-# 8080 e fixa (a IDE). O resto cobre os padroes mais comuns de dev server,
-# o bastante pra uns 3 projetos simultaneos sem precisar editar nada:
+# 8080 e fixa (a IDE), 6080 tambem (a tela virtual -- ver comando 'tela' do
+# oak, so sobe se voce pedir). O resto cobre os padroes mais comuns de dev
+# server, o bastante pra uns 3 projetos simultaneos sem precisar editar nada:
 DEFAULT_PORTS=(3000 3001 3002 5173 5174 8000 8001 5000)
 
 # Precisa de mais? Sem editar o script:
 #   OAK_PORTS="4000 9000" ./run.sh
 read -ra EXTRA_PORTS <<< "${OAK_PORTS:-}"
-ALL_PORTS=(8080 "${DEFAULT_PORTS[@]}" "${EXTRA_PORTS[@]}")
+ALL_PORTS=(8080 6080 "${DEFAULT_PORTS[@]}" "${EXTRA_PORTS[@]}")
 
 NETDEV="user,id=net0"
 for p in "${ALL_PORTS[@]}"; do
     NETDEV+=",hostfwd=tcp::${p}-:${p}"
 done
 
+# ssh nao entra no padrao "porta igual dos dois lados": a 22 do host e alta
+# chance de colidir com um sshd do proprio WSL/host, entao mapeamos pra uma
+# porta alta -- 'ssh -p 2222 root@localhost' de fora da VM.
+NETDEV+=",hostfwd=tcp::2222-:22"
+
 echo ">> IDE em http://localhost:8080"
+echo ">> ssh: ssh -p 2222 root@localhost (precisa de chave -- ver overlay/etc/ssh/sshd_config.d/oakos.conf)"
+echo ">> tela virtual (se ligada com 'tela' dentro da VM): http://localhost:6080/vnc.html"
 echo ">> portas de projeto encaminhadas: ${DEFAULT_PORTS[*]} ${EXTRA_PORTS[*]}"
 echo ">> ctrl-a x para sair do QEMU"
 echo

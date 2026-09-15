@@ -1,0 +1,22 @@
+[Unit]
+Description=noVNC -- VNC do display :0 acessivel por navegador (websocket)
+After=x11vnc.service
+Requires=x11vnc.service
+
+[Service]
+Type=simple
+User=root
+# --web serve o cliente noVNC (HTML/JS) na mesma porta do proxy websocket --
+# um so processo, uma so porta encaminhada pelo run.sh (6080). Bind 0.0.0.0
+# na porta que o hostfwd alcanca (6080): hostfwd nunca chega em loopback,
+# so no IP real do guest, entao 127.0.0.1 aqui deixava a porta reset de
+# fora (mesma causa documentada no code-server.service). O destino do
+# proxy (127.0.0.1:5900, o x11vnc) continua em loopback de proposito -- essa
+# conexao e so entre dois processos dentro da propria VM, nao passa por
+# hostfwd nenhum, entao nao precisa (nem deve) ficar exposta.
+ExecStart=/usr/bin/websockify --web=/usr/share/novnc/ 0.0.0.0:6080 127.0.0.1:5900
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

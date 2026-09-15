@@ -1,0 +1,13 @@
+[Unit]
+Description=Xvfb -- display virtual do OakOS (sem GPU, sem compositor)
+
+[Service]
+Type=simple
+# -nolisten tcp: ninguem fala X11 puro por rede -- quem acessa a tela e o
+# x11vnc (ver x11vnc.service), local, via socket unix.
+ExecStart=/usr/bin/Xvfb :0 -screen 0 1280x800x24 -nolisten tcp
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

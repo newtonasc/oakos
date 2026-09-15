@@ -6,16 +6,27 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-# 127.0.0.1: nao expomos a IDE pra rede nenhuma alem do proprio host QEMU
-# (o acesso de fora vem do hostfwd em run.sh, nao daqui). Sem --auth: o
-# code-server usa o padrao dele mesmo (auth: password), que na primeira vez
-# que roda gera uma senha aleatoria sozinho e grava em
-# ~/.config/code-server/config.yaml -- esse diretorio esta montado no disco
-# de dados persistente (ver overlay/etc/fstab), entao a senha sobrevive a
-# reinicios e rebuilds em vez de mudar toda hora. O 'oak' le e mostra essa
-# senha (ver status()/loggedIn-style checks no overlay/usr/local/bin/oak).
+# SHELL=zsh: um servico do systemd nao herda a variavel $SHELL de sessao
+# nenhuma (nao existe sessao alguma aqui, e um daemon direto do PID 1) --
+# sem isso, o terminal integrado do code-server nao sabe que root e zsh
+# (chsh no chroot-setup.sh) e cai no bash como padrao proprio dele.
+Environment=SHELL=/usr/bin/zsh
+# 0.0.0.0: precisa ser assim -- o hostfwd do QEMU (run.sh) e uma trad NAT
+# pro IP real do guest (10.0.2.15), nunca alcanca um bind em 127.0.0.1 (isso
+# e loopback de verdade, invisivel fora do proprio kernel da VM, nao uma
+# particularidade do QEMU). Testado: com bind 127.0.0.1 o curl do host da
+# "connection reset"; com 0.0.0.0, "200". Trade-off aceito: outros processos
+# dentro da propria VM (containers Docker, por exemplo) tambem enxergam a
+# porta 8080 pela rede interna, ja que a autenticacao por senha continua
+# valendo. Sem --auth: o code-server usa o padrao dele mesmo (auth:
+# password), que na primeira vez que roda gera uma senha aleatoria sozinho e
+# grava em ~/.config/code-server/config.yaml -- esse diretorio esta montado
+# no disco de dados persistente (ver overlay/etc/fstab), entao a senha
+# sobrevive a reinicios e rebuilds em vez de mudar toda hora. O 'oak' le e
+# mostra essa senha (ver status()/loggedIn-style checks no
+# overlay/usr/local/bin/oak).
 ExecStart=/usr/local/bin/code-server \
-    --bind-addr 127.0.0.1:8080 \
+    --bind-addr 0.0.0.0:8080 \
     --disable-telemetry \
     /root/workspace
 Restart=on-failure

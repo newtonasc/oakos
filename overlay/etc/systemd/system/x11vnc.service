@@ -1,0 +1,27 @@
+[Unit]
+Description=x11vnc -- serve o display :0 (Xvfb) por VNC
+After=xvfb.service
+Requires=xvfb.service
+
+[Service]
+Type=simple
+User=root
+Environment=DISPLAY=:0
+# Gera a senha so na primeira vez -- o diretorio inteiro esta no disco de
+# dados persistente (ver overlay/etc/fstab), entao ela sobrevive a
+# reinicios e rebuilds, mesmo padrao da senha do code-server (ver
+# idePassword() no 'oak'). Guarda em dois lugares: 'passwd' (formato
+# proprio do x11vnc, ofuscado, e o que ele de fato le pra autenticar) e
+# 'password.txt' (texto puro, e o que o 'oak' le pra te mostrar -- o
+# formato do x11vnc nao e reversivel). Script separado, nao inline -- ver
+# overlay/usr/local/bin/oakos-vnc-setpasswd pro motivo.
+ExecStartPre=/usr/local/bin/oakos-vnc-setpasswd
+# -listen 127.0.0.1: so o proprio host QEMU enxerga a porta -- quem expoe
+# pra fora e o hostfwd do run.sh, igual ao code-server.
+ExecStart=/usr/bin/x11vnc -display :0 -rfbauth /root/.config/x11vnc/passwd \
+    -rfbport 5900 -listen 127.0.0.1 -forever -shared -noxdamage -quiet
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

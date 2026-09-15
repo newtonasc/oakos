@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Cria o disco de dados persistente do OakOS: workspace, conta Claude
-# (~/.claude) e config da IDE (~/.config/code-server, onde mora a senha
-# gerada por ela), todos montados por bind em cima do sistema (ver
-# overlay/etc/fstab).
+# (~/.claude) e config da IDE (~/.config/code-server e ~/.config/x11vnc,
+# onde moram as senhas geradas por cada uma), todos montados por bind em
+# cima do sistema (ver overlay/etc/fstab).
 #
 # Ao contrario de build/oakos.ext4 (o sistema, recriado a cada 'make'),
 # este disco NUNCA e apagado por 'make'/'make clean' -- e onde o login e
@@ -31,7 +31,7 @@ mkdir -p build
 SEED="$(mktemp -d)"
 trap 'rm -rf "$SEED"' EXIT
 
-mkdir -p "$SEED/workspace" "$SEED/claude" "$SEED/config/code-server"
+mkdir -p "$SEED/workspace" "$SEED/claude" "$SEED/config/code-server" "$SEED/config/x11vnc"
 cat > "$SEED/workspace/README.md" <<'MSG'
 # workspace
 

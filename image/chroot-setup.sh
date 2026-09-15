@@ -30,6 +30,13 @@ done
 # Servicos que queremos ligados no boot.
 systemctl enable systemd-networkd systemd-resolved systemd-timesyncd
 
+# ssh liga sempre (e so por chave -- ver overlay/etc/ssh/sshd_config.d/
+# oakos.conf). xvfb/x11vnc/novnc (tela grafica sob demanda) ficam de fora
+# de proposito -- 'systemctl enable' delas nao roda em lugar nenhum deste
+# script, so o comando 'tela' do oak da 'systemctl start' na hora que
+# alguem precisar.
+systemctl enable ssh
+
 # Sem senha de root: e uma VM de desenvolvimento local, e pedir senha
 # atrapalha o ciclo. ISSO PRECISA MUDAR antes de qualquer uso real.
 passwd -d root
@@ -105,7 +112,7 @@ curl -fsSL https://code-server.dev/install.sh | sh -s -- \
 # e image/build-data.sh). Sem essa pasta aqui, o bind mount de boot nao tem
 # onde grudar. Incondicional -- nao depende do code-server ter instalado
 # certo.
-mkdir -p /root/workspace /root/.claude /root/.config/code-server
+mkdir -p /root/workspace /root/.claude /root/.config/code-server /root/.config/x11vnc
 cat > /root/workspace/README.md <<'MSG'
 # workspace
 

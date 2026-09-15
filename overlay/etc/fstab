@@ -18,3 +18,4 @@ LABEL=OAKDATA            /mnt/data                     ext4  defaults,noatime,no
 /mnt/data/workspace      /root/workspace               none  bind,nofail,x-systemd.requires-mounts-for=/mnt/data     0  0
 /mnt/data/claude         /root/.claude                 none  bind,nofail,x-systemd.requires-mounts-for=/mnt/data     0  0
 /mnt/data/config/code-server /root/.config/code-server none  bind,nofail,x-systemd.requires-mounts-for=/mnt/data     0  0
+/mnt/data/config/x11vnc /root/.config/x11vnc           none  bind,nofail,x-systemd.requires-mounts-for=/mnt/data     0  0

@@ -1,0 +1,19 @@
+#!/bin/sh
+# Gera a senha do VNC (x11vnc) na primeira vez que o servico sobe.
+#
+# Script separado, em vez de inline no ExecStartPre do x11vnc.service:
+# unidades systemd expandem "%" como especificador proprio delas (%s, por
+# exemplo, e "shell do usuario do servico") mesmo dentro de aspas de shell
+# -- 'printf "%s" "$pw"' inline virava 'printf "/bin/bash" "$pw"' (achado
+# testando de verdade: a senha salva era literalmente "/bin/bash"). Um
+# arquivo .sh de verdade nao passa pelo parser de unit file, entao esse
+# problema nao existe aqui.
+set -eu
+
+DIR=/root/.config/x11vnc
+[ -f "$DIR/passwd" ] && exit 0
+
+pw=$(tr -dc A-Za-z0-9 </dev/urandom | head -c16)
+printf '%s' "$pw" > "$DIR/password.txt"
+chmod 600 "$DIR/password.txt"
+x11vnc -storepasswd "$pw" "$DIR/passwd"

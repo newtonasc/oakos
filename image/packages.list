@@ -40,6 +40,27 @@ chromium              # motor de navegador. Roda --headless: o agente usa
                       # nao ha desktop aqui. O Playwright (via npm, ver
                       # chroot-setup.sh) e quem o comanda.
 
+# --- acesso remoto ---
+openssh-server        # ssh pra dentro da VM -- alternativa ao console serial
+                       # (que depende do QEMU estar aberto na sua frente).
+                       # Root nao tem senha (ver chroot-setup.sh), entao o
+                       # acesso so funciona por chave publica -- ver
+                       # overlay/etc/ssh/sshd_config.d/oakos.conf.
+
+# --- tela virtual (VNC) ---
+# Excecao deliberada a regra do topo: existe pra rodar coisa que precisa de
+# uma janela de verdade (o prototipo de IDE estilo Cursor, em Electron; o
+# Chrome do Playwright em modo headful em vez de headless). Nao e um
+# desktop -- sem Xorg/Wayland, sem compositor, sem gerenciador de janelas.
+# So um framebuffer virtual (Xvfb) exposto por VNC/navegador (x11vnc +
+# noVNC), ligado sob demanda pelo comando 'tela' do oak, nunca no boot (ver
+# overlay/etc/systemd/system/{xvfb,x11vnc,novnc}.service -- nenhum deles e
+# 'enabled', so 'start' explicito).
+xvfb                  # framebuffer X virtual, sem GPU
+x11vnc                # serve o display do Xvfb por VNC
+novnc                 # cliente VNC em HTML/JS (abre no navegador do host)
+websockify             # ponte WebSocket <-> VNC que o noVNC usa por baixo
+
 # --- containers ---
 # O Docker Engine e o plugin 'docker compose' NAO estao aqui -- o Debian so
 # empacota uma versao antiga (docker.io). Vem do repositorio oficial da
@@ -67,6 +88,19 @@ zsh                   # shell de login do root (ver chroot-setup.sh)
 # oak) como multiplexador do console serial: mesma ideia (varios 'claude'
 # ao mesmo tempo sem passar pela IDE), mas com sessao que sobrevive a
 # desconexao. O Herdr vem por script no chroot-setup.sh, nao por apt.
+
+# --- ferramentas de desenvolvimento ---
+# Python vem por apt mesmo (ao contrario do Node): o Debian nao trava numa
+# versao velha o bastante pra atrapalhar, entao nao precisa do tratamento
+# de tarball+sha256 que o Node leva no chroot-setup.sh.
+build-essential       # gcc/make -- dependencias nativas de pacotes npm pedem
+jq                    # manipular JSON no shell, uso constante do agente
+zip
+unzip
+python3
+python3-venv          # 'python3 -m venv' -- Debian recusa 'pip install' fora
+                       # de venv (PEP 668), entao isso e o caminho normal
+python3-pip
 
 # --- utilidades minimas de sobrevivencia ---
 e2fsprogs             # fsck da raiz
