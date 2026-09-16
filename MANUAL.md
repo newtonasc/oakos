@@ -107,9 +107,29 @@ oak > tela
 ```
 
 Abra a URL no navegador do seu computador (a porta `6080` é encaminhada
-pelo QEMU, igual a IDE) e entre com a senha. Você cai direto no Chromium,
-já aberto e maximizado -- navegue pra onde quiser, inclusive num projeto
-seu rodando na própria VM (`localhost:3000`, por exemplo).
+pelo QEMU, igual a IDE) e entre com a senha. Você cai num totem em tela
+cheia com seis ícones:
+
+| Ícone | Abre |
+|---|---|
+| Shell | terminal com zsh puro, sem o Oak no meio |
+| Claude | terminal já dentro do Oak |
+| Chrome | uma janela nova do Chromium |
+| Herdr | terminal já dentro do Herdr |
+| IDE | uma janela do Chromium em `localhost:8080` |
+| Explorer | o gerenciador de arquivos (pcmanfm), aberto em `/root/workspace` |
+
+O totem em si (a tela dos ícones) fica em tela cheia, sem barra de
+endereço, sem botão de fechar. Se cair de qualquer jeito, volta sozinho
+em poucos segundos. Os terminais que ele abre também sobem em tela
+cheia, fundo preto -- feche normalmente (`exit`, ou fechando a janela)
+pra voltar ao totem.
+
+Como tudo abre em tela cheia, um ícone clicado esconde o totem inteiro,
+sem barra de tarefas pra voltar. Por isso, um botão flutuante (grade
+verde 2x2, mesmo desenho dos ícones) fica sempre visível no canto
+inferior direito, por cima de qualquer app aberto -- clique nele pra
+abrir uma instância nova do totem por cima de tudo.
 
 Fica desligada por padrão pra não gastar RAM à toa. A senha é gerada na
 primeira vez que você liga, fica guardada no disco de dados (sobrevive a

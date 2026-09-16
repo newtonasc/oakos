@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+# Totem da tela virtual: pagina com icones grandes que o Chromium abre
+# sozinho quando 'tela' liga (ver browser.service), em vez de about:blank.
+# So escuta em 127.0.0.1 -- ninguem de fora da VM fala com isso, so o
+# Chromium local. Sem framework nenhum: e uma pagina so, sem chamada de
+# rede externa (nem fonte, nem icone via CDN), pra nao depender de
+# internet dentro da VM na hora de abrir a tela.
+import http.server
+import os
+import subprocess
+
+PORT = 7000
+
+# Fundo preto, fonte maior -- os terminais do launcher sao pra ocupar a
+# tela toda, nao a janelinha pequena que o xterm abre por padrao. O
+# tamanho/posicao (tela cheia) e a remocao da decoracao ficam por conta
+# do fluxbox (ver overlay/root/.fluxbox/apps, regra por nome "xterm"), NAO
+# da flag '-fullscreen' do proprio xterm -- essa pede o estado
+# _NET_WM_STATE_FULLSCREEN do X11, que trava numa camada de empilhamento
+# que o fluxbox nunca reordena (testado: uma janela nova, mesmo em cima,
+# nao aparece por cima de uma fullscreen ja aberta). O botao flutuante
+# (oakos-totem-button) depende de reordenar janela nova por cima, entao
+# nada aqui pode usar fullscreen de verdade.
+XTERM_OPTS = [
+    "-bg", "black",
+    "-fg", "white",
+    "-fa", "DejaVu Sans Mono",
+    "-fs", "16",
+]
+
+# Cada entrada: comando (lista, sem passar por shell nenhum) + env extra.
+# OAK_NO_SHELL=1 e a mesma trava que o comando 'shell'/'sessoes' do oak ja
+# usa (ver overlay/usr/local/bin/oak): sem ela, o shell de login dentro do
+# xterm relancaria o oak (.zprofile faz isso por padrao).
+APPS = {
+    "shell": (["xterm", *XTERM_OPTS, "-e", "zsh", "-l"], {"OAK_NO_SHELL": "1"}),
+    "claude": (["xterm", *XTERM_OPTS, "-e", "/usr/local/bin/oak"], {}),
+    "chrome": (["chromium", "--no-sandbox", "--new-window", "about:blank"], {}),
+    "herdr": (["xterm", *XTERM_OPTS, "-e", "herdr"], {"OAK_NO_SHELL": "1"}),
+    "ide": (["chromium", "--no-sandbox", "--new-window", "http://localhost:8080"], {}),
+    "explorer": (["pcmanfm", "/root/workspace"], {}),
+}
+
+# Icones em SVG inline, sem depender de fonte de emoji nenhuma (a imagem so
+# tem DejaVu instalada -- ver image/packages.list -- que nao tem glifo de
+# emoji, so texto).
+ICONS = {
+    "shell": '<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6 9l4 3-4 3M13 15h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    "claude": '<svg viewBox="0 0 24 24"><path d="M12 2c2 3-1 4-1 6 2-1 4 0 4 2.5S13 15 12 15s-3-2.5-3-4.5S10 5 12 2z" fill="currentColor"/><rect x="11" y="14" width="2" height="8" fill="currentColor"/></svg>',
+    "chrome": '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 12h18M12 3c2.5 2.5 2.5 15.5 0 18M12 3c-2.5 2.5-2.5 15.5 0 18" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>',
+    "herdr": '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="4.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="4" y="10" width="16" height="4.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="4" y="16" width="16" height="4.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>',
+    "ide": '<svg viewBox="0 0 24 24"><path d="M9 5l-6 7 6 7M15 5l6 7-6 7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    "explorer": '<svg viewBox="0 0 24 24"><path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>',
+}
+
+LABELS = {
+    "shell": "Shell",
+    "claude": "Claude",
+    "chrome": "Chrome",
+    "herdr": "Herdr",
+    "ide": "IDE",
+    "explorer": "Explorer",
+}
+
+CARDS = "\n".join(
+    f'<button class="card" data-app="{key}">'
+    f'<span class="icon">{ICONS[key]}</span>'
+    f'<span class="label">{LABELS[key]}</span>'
+    f"</button>"
+    for key in APPS
+)
+
+PAGE = f"""<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>OakOS</title>
+<style>
+  :root {{
+    --bg: #12161a;
+    --card: #1c2229;
+    --card-hover: #262e37;
+    --accent: #87d787;
+    --text: #e6e9ec;
+    --text-dim: #8a939c;
+  }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 48px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+  }}
+  h1 {{
+    margin: 0;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.02em;
+  }}
+  .grid {{
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 28px;
+    max-width: 900px;
+    padding: 0 24px;
+  }}
+  .card {{
+    width: 180px;
+    height: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background: var(--card);
+    border: 1px solid #2a323a;
+    border-radius: 20px;
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+  }}
+  .card:hover {{ background: var(--card-hover); }}
+  .card:active {{ transform: scale(0.96); }}
+  .icon {{
+    width: 64px;
+    height: 64px;
+    color: var(--accent);
+  }}
+  .icon svg {{ width: 100%; height: 100%; }}
+  .label {{
+    font-size: 18px;
+    font-weight: 500;
+  }}
+  .hint {{
+    color: var(--text-dim);
+    font-size: 14px;
+  }}
+</style>
+</head>
+<body>
+  <h1>OakOS</h1>
+  <div class="grid">{CARDS}</div>
+  <div class="hint">clique num icone pra abrir</div>
+<script>
+document.querySelectorAll('.card').forEach(function (el) {{
+  el.addEventListener('click', function () {{
+    fetch('/run/' + el.dataset.app);
+  }});
+}});
+</script>
+</body>
+</html>
+"""
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass  # silencioso -- nao polui o journal a cada clique
+
+    def do_GET(self):
+        if self.path in ("/", "/index.html"):
+            body = PAGE.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if self.path.startswith("/run/"):
+            app = APPS.get(self.path[len("/run/") :])
+            if app:
+                cmd, extra_env = app
+                env = {**os.environ, "DISPLAY": ":0", **extra_env}
+                subprocess.Popen(
+                    cmd,
+                    env=env,
+                    start_new_session=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                self.send_response(204)
+                self.end_headers()
+                return
+        self.send_response(404)
+        self.end_headers()
+
+
+if __name__ == "__main__":
+    http.server.HTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

@@ -1,0 +1,14 @@
+[Unit]
+Description=Botao flutuante da tela virtual (volta pro totem de qualquer app)
+After=wm.service
+Requires=wm.service
+
+[Service]
+Type=simple
+Environment=DISPLAY=:0
+ExecStart=/usr/local/bin/oakos-totem-button
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

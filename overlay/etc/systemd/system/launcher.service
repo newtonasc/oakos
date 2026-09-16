@@ -1,0 +1,14 @@
+[Unit]
+Description=Launcher da tela virtual (icones grandes: Shell, Claude, Chrome, Herdr, IDE)
+After=xvfb.service
+Requires=xvfb.service
+
+[Service]
+Type=simple
+Environment=DISPLAY=:0
+ExecStart=/usr/local/bin/oakos-launcher
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

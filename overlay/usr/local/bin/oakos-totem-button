@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+# Botao flutuante "voltar ao totem": fica sempre visivel por cima de
+# qualquer app aberto pela tela virtual (Shell, Claude, Chrome, Herdr, IDE,
+# Explorer). Sem ele, abrir qualquer um desses em tela cheia esconde o
+# totem sem jeito nenhum de voltar -- Alt+Tab do fluxbox existe, mas nao e
+# obvio nem visivel pra quem esta so navegando por VNC.
+#
+# Tkinter (python3-tk) em vez de GTK/Qt: nao faz sentido puxar o peso de
+# um toolkit inteiro so por causa de um botao. 'overrideredirect' tira a
+# janela do controle normal do window manager (sem isso o fluxbox tentaria
+# dar foco/decoracao nela), e o 'lift()' periodico e o jeito de continuar
+# por cima mesmo quando um app novo abre depois -- window managers tendem
+# a empurrar uma janela 'overrideredirect' pra tras quando outra ganha
+# foco, sem re-afirmar isso ela para de aparecer.
+import os
+import subprocess
+import tkinter as tk
+
+SIZE = 64
+MARGIN = 16
+
+
+def go_to_totem():
+    # Testado e descartado: 'wmctrl -a'/'-b add,above' (ativar ou trazer
+    # pra frente a janela do totem ja aberta) simplesmente nao tem efeito
+    # nenhum nesse fluxbox -- confirmado isolando com xprop
+    # (_NET_ACTIVE_WINDOW e _NET_CLIENT_LIST_STACKING nao mudam depois do
+    # comando). Em vez de brigar com isso, abrimos uma instancia NOVA do
+    # totem: mapear uma janela nova por cima e o comportamento padrao de
+    # qualquer window manager, inclusive esse -- e exatamente o que ja
+    # acontece toda vez que um icone do totem abre um app. '--app' (nao
+    # '--kiosk'): mesmo motivo do browser.service, uma janela fullscreen
+    # de verdade (_NET_WM_STATE_FULLSCREEN) fica numa camada que o
+    # fluxbox nao reordena, entao essa instancia nova nunca conseguiria
+    # aparecer por cima de outra janela fullscreen ja aberta.
+    subprocess.Popen(
+        ["chromium", "--no-sandbox", "--app=http://127.0.0.1:7000/"],
+        env={**os.environ, "DISPLAY": ":0"},
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+root = tk.Tk()
+root.overrideredirect(True)
+root.attributes("-topmost", True)
+
+screen_w = root.winfo_screenwidth()
+screen_h = root.winfo_screenheight()
+x = screen_w - SIZE - MARGIN
+y = screen_h - SIZE - MARGIN
+root.geometry(f"{SIZE}x{SIZE}+{x}+{y}")
+
+canvas = tk.Canvas(
+    root, width=SIZE, height=SIZE, bg="#1c2229",
+    highlightthickness=2, highlightbackground="#87d787",
+)
+canvas.pack(fill="both", expand=True)
+
+# Grade 2x2, o mesmo motivo visual da pagina do totem -- reconhecivel como
+# "voltar pros icones" sem depender de nenhuma fonte com glifo de emoji.
+pad, gap, half = 14, 4, SIZE // 2
+for x0, y0 in ((pad, pad), (half + gap, pad), (pad, half + gap), (half + gap, half + gap)):
+    canvas.create_rectangle(x0, y0, x0 + (half - gap - pad), y0 + (half - gap - pad), fill="#87d787", outline="")
+
+canvas.configure(cursor="hand2")
+canvas.bind("<Button-1>", lambda _e: go_to_totem())
+
+
+def keep_on_top():
+    root.lift()
+    root.attributes("-topmost", True)
+    root.after(1000, keep_on_top)
+
+
+keep_on_top()
+root.mainloop()

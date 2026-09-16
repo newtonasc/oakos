@@ -56,12 +56,28 @@ openssh-server        # ssh pra dentro da VM -- alternativa ao console serial
 # visualmente num app que esta rodando na propria VM). Framebuffer virtual
 # (Xvfb) + WM leve (fluxbox, so pra janela abrir maximizada e ter foco --
 # sem barra de tarefas, sem decoracao pesada) + o mesmo chromium do bloco
-# acima, agora headful. Exposto por VNC/navegador (x11vnc + noVNC), ligado
-# sob demanda pelo comando 'tela' do oak, nunca no boot (ver
-# overlay/etc/systemd/system/{xvfb,wm,browser,x11vnc,novnc}.service --
-# nenhum deles e 'enabled', so 'start' explicito).
+# acima, agora headful, abrindo direto no launcher (icones grandes --
+# ver overlay/usr/local/bin/oakos-launcher) em vez de pagina em branco.
+# Exposto por VNC/navegador (x11vnc + noVNC), ligado sob demanda pelo
+# comando 'tela' do oak, nunca no boot (ver
+# overlay/etc/systemd/system/{xvfb,wm,launcher,browser,totem-button,x11vnc,novnc}.service
+# -- nenhum deles e 'enabled', so 'start' explicito).
 xvfb                  # framebuffer X virtual, sem GPU
 fluxbox               # window manager leve pro display do Xvfb
+feh                   # so pro fluxbox achar um "wallpaper setter" e nao
+                       # estourar popup de erro (xmessage) no primeiro
+                       # boot -- testado: nao tem a ver com rootCommand
+                       # nem com nenhum arquivo de config, o fluxbox chama
+                       # 'fbsetbg' direto no startup, sempre, e sem nenhum
+                       # dos programas que ele sabe usar (Esetroot, feh,
+                       # hsetroot, chbg...) instalado ele reclama. Nao
+                       # configuramos wallpaper nenhum, so precisamos que
+                       # a checagem ache alguma coisa.
+xterm                 # terminal que o launcher abre pros icones Shell/Claude/Herdr
+pcmanfm               # explorer de arquivos grafico, icone Explorer do launcher
+python3-tk            # Tkinter -- o botao flutuante 'voltar ao totem' (ver
+                       # overlay/usr/local/bin/oakos-totem-button) e so isso,
+                       # sem trazer GTK/Qt a mais so por causa de um botao
 x11vnc                # serve o display do Xvfb por VNC
 novnc                 # cliente VNC em HTML/JS (abre no navegador do host)
 websockify             # ponte WebSocket <-> VNC que o noVNC usa por baixo

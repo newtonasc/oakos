@@ -249,16 +249,17 @@ function handle(line) {
       return;
 
     case 'tela': case 'gui': case 'grafico': case 'vnc':
-      // Xvfb/wm/browser/x11vnc/novnc nao sao 'enabled' (ver packages.list e
-      // os .service em overlay/etc/systemd/system) -- ficam parados ate
-      // alguem pedir, pra nao pesar RAM em toda VM que nunca usa tela
-      // grafica. 'systemctl start' aqui sobe os cinco (a cadeia Requires=
-      // cuida da ordem) so na primeira vez que for preciso.
+      // Xvfb/wm/launcher/browser/totem-button/x11vnc/novnc nao sao
+      // 'enabled' (ver packages.list e os .service em
+      // overlay/etc/systemd/system) -- ficam parados ate alguem pedir, pra
+      // nao pesar RAM em toda VM que nunca usa tela grafica. 'systemctl
+      // start' aqui sobe os sete (a cadeia Requires= cuida da ordem) so na
+      // primeira vez que for preciso.
       if (!has('websockify')) {
         say(`${C.red}  Tela virtual nao instalada nesta imagem.${C.reset}`);
         return;
       }
-      if (run('systemctl', ['start', 'xvfb', 'wm', 'browser', 'x11vnc', 'novnc']) !== 0) {
+      if (run('systemctl', ['start', 'xvfb', 'wm', 'launcher', 'browser', 'totem-button', 'x11vnc', 'novnc']) !== 0) {
         say(`${C.red}  Falha ao ligar a tela -- 'journalctl -u x11vnc -u novnc' pra detalhes.${C.reset}`);
         return;
       }

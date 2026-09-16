@@ -115,12 +115,24 @@ construiu.
 
 Quando algo precisa mesmo de uma janela (um app Electron, o próprio Chromium
 sem `--headless`), existe o comando `tela`: liga um framebuffer virtual
-(**Xvfb**) com um window manager leve (**fluxbox**, só pra abrir janela
-maximizada, sem decoração pesada) e o mesmo Chromium agora headful, servidos
-por VNC/navegador (**x11vnc** + **noVNC**). Fica desligado até alguém pedir,
-para não pesar RAM em toda VM que nunca usa tela gráfica (ver
-`overlay/etc/systemd/system/{xvfb,wm,browser,x11vnc,novnc}.service`, nenhum
-`enabled`).
+(**Xvfb**) com um window manager leve (**fluxbox**) e abre um totem em tela
+cheia com seis ícones -- Shell, Claude, Chrome, Herdr, IDE e Explorer
+(**pcmanfm**) -- cada um abrindo sua janela (terminal em tela cheia e
+fundo preto, ou uma nova janela do Chromium). Tela cheia sem decoração,
+mas de propósito **sem** o estado fullscreen de verdade do X11
+(`_NET_WM_STATE_FULLSCREEN`, via `--kiosk`/`-fullscreen`): testado que o
+fluxbox trava esse estado numa camada de empilhamento que nunca reordena
+com janela nova nenhuma. Em vez disso, tamanho/posição/decoração vêm de
+uma regra do próprio fluxbox (`overlay/root/.fluxbox/apps`), o que deixa
+tudo na camada normal, onde "janela nova aparece por cima" funciona de
+verdade. Como cada ícone abre em tela cheia e some com o totem, um botão
+flutuante (**Tkinter**) fica sempre visível por cima -- clicar abre uma
+instância nova do totem por cima de tudo. Servido por VNC/navegador
+(**x11vnc** + **noVNC**).
+Fica desligado até alguém pedir, para não pesar RAM em toda VM que nunca
+usa tela gráfica (ver
+`overlay/etc/systemd/system/{xvfb,wm,launcher,browser,totem-button,x11vnc,novnc}.service`,
+nenhum `enabled`).
 
 Não é um desktop: sem barra de tarefas, sem múltiplas janelas coordenadas,
 sem nada além do que uma janela precisa pra existir. Um desktop de verdade
