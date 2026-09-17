@@ -1,0 +1,14 @@
+[Unit]
+Description=Dock flutuante da tela virtual (icones dos apps abertos, estilo macOS)
+After=wm.service launcher.service
+Requires=wm.service launcher.service
+
+[Service]
+Type=simple
+Environment=DISPLAY=:0
+ExecStart=/usr/local/bin/oakos-dock
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

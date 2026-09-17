@@ -1,13 +1,15 @@
 ! Forca tela cheia sem decoracao pros apps da tela virtual, SEM usar o
 ! estado fullscreen de verdade do X11 (_NET_WM_STATE_FULLSCREEN) -- esse
 ! estado poe a janela numa camada de empilhamento que o fluxbox nunca
-! reordena, o que quebrava o botao flutuante "voltar ao totem"
-! (overlay/usr/local/bin/oakos-totem-button): uma instancia nova do totem
-! nunca conseguia aparecer por cima de um app fullscreen ja aberto.
-! Aqui em vez disso e so decoracao+tamanho+posicao via regra do proprio
-! fluxbox -- a janela fica na camada normal, onde "nova janela aparece
-! por cima" e o comportamento padrao (e o unico que realmente funciona
-! nesse WM, testado).
+! reordena, o que quebrava o botao flutuante "voltar ao totem" que existia
+! antes (uma instancia nova do totem nunca conseguia aparecer por cima de
+! um app fullscreen ja aberto) e quebraria do mesmo jeito a dock atual
+! (overlay/usr/local/bin/oakos-dock): trazer uma janela de volta pra
+! frente (com ou sem 'xdotool') tambem depende de ficar na mesma camada de
+! empilhamento normal. Aqui em vez disso e so decoracao+tamanho+posicao
+! via regra do proprio fluxbox -- a janela fica na camada normal, onde
+! "nova janela aparece por cima" e o comportamento padrao (e o unico que
+! realmente funciona nesse WM, testado).
 !
 ! xterm: os terminais que o launcher abre (Shell/Claude/Herdr).
 [app] (name=xterm)
@@ -17,7 +19,7 @@
 [end]
 
 ! O totem em si roda em modo --app do Chromium (ver browser.service e
-! oakos-totem-button). Nesse modo o WM_CLASS muda pro host da URL
+! oakos-dock). Nesse modo o WM_CLASS muda pro host da URL
 ! ("127.0.0.1", confirmado com xwininfo) em vez do "chromium" de sempre --
 ! casamos por isso, nao pelo titulo da pagina: titulo (_NET_WM_NAME) so
 ! fica pronto DEPOIS que a janela e mapeada (a pagina ainda esta

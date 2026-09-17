@@ -1,0 +1,29 @@
+#!/bin/sh
+# xdg-open minimo pra tela virtual do OakOS.
+#
+# Sem isso, qualquer coisa que tente abrir um link no navegador padrao (o
+# 'claude /login', por exemplo, que usa o pacote 'open' do npm -- esse
+# procura por 'xdg-open' no PATH e desiste em silencio se nao achar) nunca
+# consegue: a imagem nao tem x11-xserver-utils/xdg-utils (seria "conforto
+# de desktop" fora do escopo do sistema base, ver image/packages.list), e
+# sem xdg-open o pacote 'open' nao tem como abrir nada -- so a URL impressa
+# no terminal ficava, sem o Chromium abrir sozinho (achado testando o
+# fluxo de login OAuth de verdade pela tela virtual).
+#
+# Abre uma aba nova no MESMO chromium que ja esta rodando (browser.service,
+# o totem) em vez de um processo novo -- mesmo truque que os icones
+# Chrome/IDE do totem ja usam (ver oakos-launcher): o proprio Chromium
+# resolve isso sozinho por ja rodar com o mesmo perfil.
+#
+# Sem DISPLAY (uso fora da tela virtual -- SSH, console serial) nao tem
+# janela nenhuma pra abrir: sai com erro, igual o xdg-open de verdade sairia
+# sem sessao grafica, sem travar quem chamou (o login continua funcionando
+# so com a URL impressa, como sempre funcionou).
+if [ -z "${DISPLAY:-}" ]; then
+    exit 1
+fi
+
+# --test-type: mesmo motivo do browser.service/oakos-launcher -- some com
+# a faixa amarela do '--no-sandbox' (obrigatorio rodando como root).
+nohup chromium --no-sandbox --test-type --new-window "$1" >/dev/null 2>&1 &
+exit 0

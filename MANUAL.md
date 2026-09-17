@@ -126,10 +126,29 @@ cheia, fundo preto -- feche normalmente (`exit`, ou fechando a janela)
 pra voltar ao totem.
 
 Como tudo abre em tela cheia, um ícone clicado esconde o totem inteiro,
-sem barra de tarefas pra voltar. Por isso, um botão flutuante (grade
-verde 2x2, mesmo desenho dos ícones) fica sempre visível no canto
-inferior direito, por cima de qualquer app aberto -- clique nele pra
-abrir uma instância nova do totem por cima de tudo.
+sem barra de tarefas pra voltar. Por isso, uma dock flutuante (estilo
+macOS) fica sempre visível na parte de baixo da tela, por cima de
+qualquer app aberto: um ícone pra cada app que está de verdade aberto no
+momento (mais um ícone fixo do totem, grade verde 2x2), com o nome
+embaixo. Clique num ícone pra voltar pra aquele app -- ele volta pra
+frente em vez de abrir outra instância por cima. A dock atualiza sozinha
+a cada segundo: feche um app (`exit` no terminal, por exemplo) e o ícone
+dele some.
+
+No canto inferior esquerdo do totem fica um botão pequeno de desligar
+(pede confirmação antes) -- mesmo efeito do `desligar` do Oak, só que
+sem precisar abrir um terminal.
+
+Um link de OAuth (por exemplo o `login` do Oak) abre sozinho uma aba
+nova no Chromium da tela -- não precisa copiar e colar. Se precisar
+copiar mesmo assim, selecionar o texto com o mouse já copia (cola com o
+botão do meio ou `Ctrl+Shift+V`); `Ctrl+Shift+C` copia uma seleção feita
+com o teclado.
+
+Os terminais do totem (Shell/Claude/Herdr) já sobem com acentuação
+correta (locale `C.UTF-8`, vale pro console serial e pro ssh também),
+cor de verdade (256 cores) e 5000 linhas de histórico pra rolar pra
+cima -- não precisa configurar nada além disso.
 
 Fica desligada por padrão pra não gastar RAM à toa. A senha é gerada na
 primeira vez que você liga, fica guardada no disco de dados (sobrevive a
