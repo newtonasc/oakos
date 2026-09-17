@@ -3,9 +3,18 @@ Description=Xvfb -- display virtual do OakOS (sem GPU, sem compositor)
 
 [Service]
 Type=simple
+Environment=DISPLAY=:0
 # -nolisten tcp: ninguem fala X11 puro por rede -- quem acessa a tela e o
 # x11vnc (ver x11vnc.service), local, via socket unix.
 ExecStart=/usr/bin/Xvfb :0 -screen 0 1280x800x24 -nolisten tcp
+# Xvfb sobe com key auto-repeat DESLIGADO por padrao (ao contrario de um
+# Xorg de verdade, que liga sozinho) -- sem isso, segurar uma tecla (o
+# Backspace, por exemplo) so apaga um caractere por vez, nunca repete
+# enquanto fica pressionada. 'xset r on' liga isso, mas precisa de retry:
+# ExecStartPost roda logo depois do 'fork' do processo, sem esperar o
+# socket do X ficar pronto pra aceitar conexao -- direto na primeira
+# tentativa e uma corrida que pode perder.
+ExecStartPost=/bin/sh -c 'for i in $(seq 20); do xset r on 2>/dev/null && exit 0; sleep 0.2; done'
 Restart=on-failure
 RestartSec=2
 

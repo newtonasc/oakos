@@ -60,7 +60,7 @@ openssh-server        # ssh pra dentro da VM -- alternativa ao console serial
 # ver overlay/usr/local/bin/oakos-launcher) em vez de pagina em branco.
 # Exposto por VNC/navegador (x11vnc + noVNC), ligado sob demanda pelo
 # comando 'tela' do oak, nunca no boot (ver
-# overlay/etc/systemd/system/{xvfb,wm,launcher,browser,totem-button,x11vnc,novnc}.service
+# overlay/etc/systemd/system/{xvfb,wm,launcher,browser,dock,x11vnc,novnc}.service
 # -- nenhum deles e 'enabled', so 'start' explicito).
 xvfb                  # framebuffer X virtual, sem GPU
 fluxbox               # window manager leve pro display do Xvfb
@@ -75,9 +75,14 @@ feh                   # so pro fluxbox achar um "wallpaper setter" e nao
                        # a checagem ache alguma coisa.
 xterm                 # terminal que o launcher abre pros icones Shell/Claude/Herdr
 pcmanfm               # explorer de arquivos grafico, icone Explorer do launcher
-python3-tk            # Tkinter -- o botao flutuante 'voltar ao totem' (ver
-                       # overlay/usr/local/bin/oakos-totem-button) e so isso,
-                       # sem trazer GTK/Qt a mais so por causa de um botao
+python3-tk            # Tkinter -- a dock flutuante (ver overlay/usr/local/bin/
+                       # oakos-dock) e so isso, sem trazer GTK/Qt a mais so
+                       # por causa de uma barra de icones
+x11-xserver-utils     # xset -- liga key auto-repeat no Xvfb (ver xvfb.service),
+                       # que sobe com isso desligado por padrao
+xdotool               # acha e ativa (foco + traz pra frente) a janela de um
+                       # app ja aberto pelo PID dele -- e o que a dock usa pra
+                       # "voltar" pra um app em vez de abrir outro por cima
 x11vnc                # serve o display do Xvfb por VNC
 novnc                 # cliente VNC em HTML/JS (abre no navegador do host)
 websockify             # ponte WebSocket <-> VNC que o noVNC usa por baixo

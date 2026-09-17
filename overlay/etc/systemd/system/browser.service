@@ -18,13 +18,17 @@ Environment=DISPLAY=:0
 # --app assume) -- mas sem o --kiosk pedir o estado de tela cheia do proprio X11
 # (_NET_WM_STATE_FULLSCREEN). Motivo, achado testando: fluxbox trata
 # janelas fullscreen numa camada especial que NAO reordena com janela
-# nova nenhuma -- o botao flutuante (oakos-totem-button) abre uma
-# instancia nova do totem por cima de qualquer app quando clicado, e isso
-# so funciona se a janela nova entrar na camada normal de empilhamento.
+# nova nenhuma -- a dock (oakos-dock) depende de trazer esta janela de
+# volta pra frente (ou abrir uma nova, se isso falhar), e isso so
+# funciona se ela ficar na camada normal de empilhamento.
+# --test-type: sem ele o Chromium mostra uma faixa amarela por cima do
+# totem avisando que '--no-sandbox' e flag nao suportada -- mesmo truque
+# que Selenium/Puppeteer usam ha anos pra rodar Chromium como root sem
+# essa faixa.
 # Restart=always (em vez de on-failure): se mesmo assim alguem conseguir
 # fechar, volta sozinho em poucos segundos, saia como sair (sucesso ou
 # erro).
-ExecStart=/usr/bin/chromium --no-sandbox --app=http://127.0.0.1:7000/
+ExecStart=/usr/bin/chromium --no-sandbox --test-type --app=http://127.0.0.1:7000/
 Restart=always
 RestartSec=2
 

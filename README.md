@@ -125,14 +125,41 @@ fluxbox trava esse estado numa camada de empilhamento que nunca reordena
 com janela nova nenhuma. Em vez disso, tamanho/posição/decoração vêm de
 uma regra do próprio fluxbox (`overlay/root/.fluxbox/apps`), o que deixa
 tudo na camada normal, onde "janela nova aparece por cima" funciona de
-verdade. Como cada ícone abre em tela cheia e some com o totem, um botão
-flutuante (**Tkinter**) fica sempre visível por cima -- clicar abre uma
-instância nova do totem por cima de tudo. Servido por VNC/navegador
-(**x11vnc** + **noVNC**).
+verdade. Como cada ícone abre em tela cheia e some com o totem, uma dock
+flutuante (**Tkinter**, `overlay/usr/local/bin/oakos-dock`) fica sempre
+visível na parte de baixo da tela, estilo macOS: um ícone por app
+realmente aberto (consultando `/open` no próprio launcher, que rastreia
+o PID de cada `/run/<app>`), mais um ícone fixo pro totem. Clicar chama
+`xdotool windowactivate` pra trazer aquela janela de volta pra frente em
+vez de abrir outra por cima -- substitui o botão flutuante antigo
+("voltar ao totem"), que só sabia abrir uma instância nova porque
+`wmctrl -a` não tinha efeito nesse fluxbox; `xdotool` é outro mecanismo
+(ainda não confirmado rodando de verdade), com abrir de novo como
+fallback se também não funcionar. Servido por VNC/navegador (**x11vnc**
++ **noVNC**).
 Fica desligado até alguém pedir, para não pesar RAM em toda VM que nunca
 usa tela gráfica (ver
-`overlay/etc/systemd/system/{xvfb,wm,launcher,browser,totem-button,x11vnc,novnc}.service`,
+`overlay/etc/systemd/system/{xvfb,wm,launcher,browser,dock,x11vnc,novnc}.service`,
 nenhum `enabled`).
+Um `xdg-open` próprio (`overlay/usr/local/bin/xdg-open`) abre esses links
+numa aba nova do mesmo Chromium -- sem ele, um fluxo como o `claude
+/login` (que usa o pacote `open` do npm, que procura por `xdg-open` no
+PATH) só teria a URL impressa no terminal, sem nenhum navegador abrindo
+sozinho. Os terminais do totem também ganham `selectToClipboard` e
+`Ctrl+Shift+C`/`Ctrl+Shift+V` via `-xrm` (ver `oakos-launcher`), pra dar
+um jeito de copiar/colar por teclado quando o link precisar ir pra outro
+lugar, além de `TERM=xterm-256color` (pra `git`/`ripgrep`/Claude Code
+detectarem cor de verdade, não só 8 cores) e 5000 linhas de scrollback em
+vez das 64 padrão do xterm. O totem tem ainda um botão pequeno de
+desligar no canto inferior esquerdo, que só chama o mesmo `systemctl
+poweroff` do `desligar` do Oak.
+
+**Locale UTF-8 sem o pacote `locales`.** `/etc/environment` fixa
+`LANG=C.UTF-8`/`LC_ALL=C.UTF-8` -- essa locale vem embutida na glibc, sem
+precisar de `locale-gen`. Sem isso os acentos do próprio `oak` (é tudo em
+português) saem como lixo em qualquer terminal (console serial, ssh, ou
+o xterm do totem): systemd aplica esse arquivo a todo serviço no boot, e
+o PAM do `login`/`sshd` faz o mesmo pros dois outros caminhos.
 
 Não é um desktop: sem barra de tarefas, sem múltiplas janelas coordenadas,
 sem nada além do que uma janela precisa pra existir. Um desktop de verdade

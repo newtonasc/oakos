@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+# Dock flutuante, estilo macOS: uma barra fixa na parte de baixo da tela
+# com um icone por app que esta REALMENTE aberto (Shell/Claude/Herdr/
+# Chrome/IDE/Explorer, ver oakos-launcher) -- clicar traz esse app de
+# volta pra frente, sem abrir outra instancia por cima.
+#
+# Substitui o botao flutuante antigo (oakos-totem-button, so "voltar ao
+# totem"): aquele existia porque trazer a janela do totem de volta pra
+# frente com 'wmctrl -a'/'-b add,above' nao tinha efeito nenhum nesse
+# fluxbox (confirmado isolando com xprop, na epoca) -- a saida foi so
+# ABRIR OUTRA instancia por cima, o que ia empilhando processo de totem
+# a cada clique. Aqui trocamos 'wmctrl' por 'xdotool windowactivate',
+# outro mecanismo (raise direto via Xlib, nao so um client-message EWMH
+# que o WM pode ignorar) -- MAS ISSO AINDA NAO FOI CONFIRMADO rodando de
+# verdade nesse fluxbox. Se continuar sem efeito, o fallback abaixo (abrir
+# de novo) garante que o pior caso e igual ao comportamento antigo.
+#
+# Tkinter (python3-tk), mesma escolha do botao antigo: nao vale a pena
+# GTK/Qt inteiro so por uma barra de icones.
+import json
+import os
+import subprocess
+import tkinter as tk
+import urllib.request
+
+LAUNCHER = "http://127.0.0.1:7000"
+POLL_MS = 1000
+ICON = 44
+GAP = 10
+PAD = 12
+MARGIN_BOTTOM = 12
+
+# Mesmas chaves do oakos-launcher (APPS/LABELS) -- reproduzidas aqui em vez
+# de importadas: e outro processo, outro service, e o desenho do icone
+# (formas simples no Canvas do Tkinter, sem parser de SVG nenhum) e
+# diferente o bastante do SVG da pagina do totem que nao compensava tentar
+# compartilhar codigo entre os dois.
+LABELS = {
+    "totem": "Totem",
+    "shell": "Shell",
+    "claude": "Claude",
+    "chrome": "Chrome",
+    "herdr": "Herdr",
+    "ide": "IDE",
+    "explorer": "Explorer",
+}
+
+ACCENT = "#87d787"
+BG = "#1c2229"
+BG_HOVER = "#262e37"
+BORDER = "#2a323a"
+TEXT_DIM = "#8a939c"
+
+
+def draw_icon(canvas, app, cx, cy, r):
+    """Desenha em cima de um circulo (ja preenchido pelo chamador) um
+    glifo simples que lembra o SVG do totem pra esse app -- so formas do
+    Canvas (linha, retangulo, ovalo), sem depender de fonte de emoji nem
+    de parser de SVG."""
+    s = r * 0.55  # metade do lado dos elementos internos, relativo ao raio
+    if app == "totem":
+        # Grade 2x2 -- o mesmo desenho do botao flutuante que este arquivo
+        # substitui (oakos-totem-button), pra quem ja se acostumou reconhecer.
+        for dx, dy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
+            x0, y0 = cx + dx * s * 0.55 - s * 0.35, cy + dy * s * 0.55 - s * 0.35
+            canvas.create_rectangle(x0, y0, x0 + s * 0.7, y0 + s * 0.7, fill=ACCENT, outline="")
+    elif app == "shell":
+        canvas.create_rectangle(cx - s, cy - s, cx + s, cy + s, outline=ACCENT, width=2)
+        canvas.create_line(cx - s * 0.5, cy - s * 0.35, cx + s * 0.05, cy, cx - s * 0.5, cy + s * 0.35,
+                            fill=ACCENT, width=2, capstyle=tk.ROUND, joinstyle=tk.ROUND)
+    elif app == "claude":
+        canvas.create_oval(cx - s * 0.7, cy - s * 0.9, cx + s * 0.7, cy + s * 0.5, fill=ACCENT, outline="")
+        canvas.create_rectangle(cx - s * 0.15, cy + s * 0.3, cx + s * 0.15, cy + s, fill=ACCENT, outline="")
+    elif app == "chrome":
+        canvas.create_oval(cx - s, cy - s, cx + s, cy + s, outline=ACCENT, width=2)
+        canvas.create_line(cx - s, cy, cx + s, cy, fill=ACCENT, width=2)
+    elif app == "herdr":
+        for dy in (-s * 0.7, 0, s * 0.7):
+            canvas.create_rectangle(cx - s, cy + dy - s * 0.28, cx + s, cy + dy + s * 0.28, outline=ACCENT, width=2)
+    elif app == "ide":
+        canvas.create_line(cx - s * 0.1, cy - s, cx - s, cy, cx - s * 0.1, cy + s,
+                            fill=ACCENT, width=2, capstyle=tk.ROUND, joinstyle=tk.ROUND)
+        canvas.create_line(cx + s * 0.1, cy - s, cx + s, cy, cx + s * 0.1, cy + s,
+                            fill=ACCENT, width=2, capstyle=tk.ROUND, joinstyle=tk.ROUND)
+    elif app == "explorer":
+        canvas.create_polygon(
+            cx - s, cy - s * 0.4, cx - s * 0.2, cy - s * 0.4, cx, cy - s * 0.75, cx + s, cy - s * 0.75,
+            cx + s, cy + s * 0.6, cx - s, cy + s * 0.6,
+            outline=ACCENT, width=2, fill="",
+        )
+
+
+def activate_or_launch(app, pid):
+    # xdotool procura a janela pelo PID de verdade (o que o oakos-launcher
+    # guardou ao abrir, ver 'RUNNING' la), nao por titulo/classe -- so
+    # existe risco de errar se o processo trocar de identidade (nao e o
+    # caso de nenhum dos apps daqui). Sem janela achada (o processo existe
+    # mas ainda nao criou janela nenhuma, ou o xdotool nao consegue por
+    # algum motivo), cai pro mesmo comportamento de sempre: abrir de novo.
+    try:
+        out = subprocess.run(
+            ["xdotool", "search", "--pid", str(pid)],
+            capture_output=True, text=True, timeout=2,
+        ).stdout.strip()
+    except Exception:
+        out = ""
+    win = out.splitlines()[0] if out else None
+    if win:
+        subprocess.Popen(["xdotool", "windowactivate", win],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        launch(app)
+
+
+def launch(app):
+    try:
+        urllib.request.urlopen(f"{LAUNCHER}/run/{app}", timeout=2).read()
+    except Exception:
+        pass  # launcher fora do ar -- nada a fazer, sem popup pra nao poluir a tela
+
+
+def go_to_totem():
+    # O totem (browser.service) nao passa pelo /run/ do launcher -- nao tem
+    # PID rastreado ali. Acha ele pela classe da janela (--app assume
+    # WM_CLASS "127.0.0.1", ver overlay/root/.fluxbox/apps) em vez de PID.
+    try:
+        out = subprocess.run(
+            ["xdotool", "search", "--class", "127.0.0.1"],
+            capture_output=True, text=True, timeout=2,
+        ).stdout.strip()
+    except Exception:
+        out = ""
+    win = out.splitlines()[0] if out else None
+    if win:
+        subprocess.Popen(["xdotool", "windowactivate", win],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        # So deveria acontecer se o browser.service estiver fora do ar --
+        # ele tem Restart=always, entao isso e so um paraquedas.
+        subprocess.Popen(
+            ["chromium", "--no-sandbox", "--test-type", "--app=http://127.0.0.1:7000/"],
+            env={**os.environ, "DISPLAY": ":0"},
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+
+def fetch_open():
+    try:
+        with urllib.request.urlopen(f"{LAUNCHER}/open", timeout=2) as r:
+            return json.load(r)
+    except Exception:
+        return []
+
+
+root = tk.Tk()
+root.overrideredirect(True)
+root.attributes("-topmost", True)
+root.configure(bg=BG)
+
+canvas = tk.Canvas(root, bg=BG, highlightthickness=0)
+canvas.pack(fill="both", expand=True)
+
+screen_w = root.winfo_screenwidth()
+screen_h = root.winfo_screenheight()
+
+_items = []  # [(app, pid_ou_None)] na ordem desenhada -- pid=None e o totem
+
+
+def hit_test(x):
+    for i, _ in enumerate(_items):
+        left = PAD + i * (ICON + GAP)
+        if left <= x <= left + ICON:
+            return i
+    return None
+
+
+def on_click(event):
+    i = hit_test(event.x)
+    if i is None:
+        return
+    app, pid = _items[i]
+    if pid is None:
+        go_to_totem()
+    else:
+        activate_or_launch(app, pid)
+
+
+def on_motion(event):
+    i = hit_test(event.x)
+    canvas.configure(cursor="hand2" if i is not None else "")
+
+
+def redraw():
+    open_apps = fetch_open()  # [{"pid": int, "app": str}, ...]
+    global _items
+    _items = [("totem", None)] + [(o["app"], o["pid"]) for o in open_apps]
+
+    label_h = 16
+    width = PAD * 2 + len(_items) * ICON + (len(_items) - 1) * GAP
+    height = PAD * 2 + ICON + label_h
+    x = (screen_w - width) // 2
+    y = screen_h - height - MARGIN_BOTTOM
+    root.geometry(f"{width}x{height}+{x}+{y}")
+
+    canvas.delete("all")
+    canvas.create_rectangle(0, 0, width, height, fill=BG, outline=BORDER)
+    r = ICON // 2
+    for i, (app, _pid) in enumerate(_items):
+        cx = PAD + i * (ICON + GAP) + r
+        cy = PAD + r
+        canvas.create_oval(cx - r, cy - r, cx + r, cy + r, fill=BG_HOVER, outline=BORDER)
+        draw_icon(canvas, app, cx, cy, r * 0.6)
+        canvas.create_text(cx, PAD + ICON + label_h / 2, text=LABELS.get(app, app),
+                            fill=TEXT_DIM, font=("DejaVu Sans", 8))
+
+    root.after(POLL_MS, redraw)
+
+
+canvas.bind("<Button-1>", on_click)
+canvas.bind("<Motion>", on_motion)
+
+
+def keep_on_top():
+    # Mesmo motivo do botao antigo: o fluxbox tende a empurrar uma janela
+    # 'overrideredirect' pra tras quando outra ganha foco -- sem reafirmar
+    # isso periodicamente, a dock para de aparecer assim que qualquer app
+    # abre por cima.
+    root.lift()
+    root.attributes("-topmost", True)
+    root.after(1000, keep_on_top)
+
+
+redraw()
+keep_on_top()
+root.mainloop()

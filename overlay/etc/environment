@@ -1,0 +1,20 @@
+# O overlay SOBRESCREVE este arquivo por completo (tar por cima, ver
+# image/build-rootfs.sh) -- por isso o PATH abaixo repete exatamente o
+# default que o base-files do Debian ja traria; sem repetir, a gente
+# perdia esse PATH de vez.
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Locale UTF-8 sem depender do pacote 'locales' (locale-gen pesa na imagem
+# e nao muda nada aqui) -- C.UTF-8 vem embutido na glibc, disponivel sempre.
+# Sem isso, tudo que sai como UTF-8 (os proprios acentos do 'oak', em
+# portugues, alem do que qualquer app do sistema imprimir) e interpretado
+# como Latin-1 por quem le a variavel (readline, less, o proprio xterm
+# decidindo se abre em modo UTF-8) e sai como lixo.
+#
+# systemd le este arquivo no boot e usa como ambiente padrao de QUALQUER
+# unidade (inclusive o launcher.service, que e quem repassa o ambiente pro
+# xterm do totem e, dali, pro 'oak'/'claude'). PAM (login e sshd, ambos com
+# pam_env por padrao no Debian) le o mesmo arquivo pro console serial/tty1
+# (autologin) e pro ssh -- um arquivo so cobre os tres caminhos.
+LANG=C.UTF-8
+LC_ALL=C.UTF-8

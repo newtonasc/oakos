@@ -6,10 +6,38 @@
 # rede externa (nem fonte, nem icone via CDN), pra nao depender de
 # internet dentro da VM na hora de abrir a tela.
 import http.server
+import json
 import os
 import subprocess
 
 PORT = 7000
+
+# pid -> chave do app (ver APPS), pros apps abertos por aqui aparecerem na
+# dock (overlay/usr/local/bin/oakos-dock, endpoint /open abaixo). So
+# rastreia o que ESTE launcher lancou -- o totem em si (browser.service,
+# fora do /run/) nao passa por aqui, a dock trata ele a parte, por classe
+# de janela.
+#
+# Chrome/IDE nao dao pra confiar nesse rastreio: '--new-window' num
+# Chromium que ja esta rodando (o do browser.service) so manda um pedido
+# pra instancia existente e sai na hora -- o pid que a gente guarda aqui
+# e o desse processo de pedido, que morre sozinho antes do proximo poll
+# da dock, entao o icone deles na pratica nunca chega a aparecer. Shell/
+# Claude/Herdr/Explorer sao processos de verdade, o pid deles e o mesmo
+# do inicio ao fim -- e onde isso realmente funciona.
+RUNNING = {}
+
+
+def _alive(pid):
+    # waitpid, nao kill(pid, 0): este processo e o PAI de tudo que lanca
+    # (start_new_session so cria sessao nova, nao muda quem e o pai) --
+    # sem colher o status na saida, o filho vira zumbi e um kill(pid, 0)
+    # continuaria "vendo" ele pra sempre, e o icone nunca sumiria da dock.
+    try:
+        reaped, _status = os.waitpid(pid, os.WNOHANG)
+    except ChildProcessError:
+        return False  # ja foi colhido antes, ou nunca foi filho nosso
+    return reaped == 0
 
 # Fundo preto, fonte maior -- os terminais do launcher sao pra ocupar a
 # tela toda, nao a janelinha pequena que o xterm abre por padrao. O
@@ -18,26 +46,63 @@ PORT = 7000
 # da flag '-fullscreen' do proprio xterm -- essa pede o estado
 # _NET_WM_STATE_FULLSCREEN do X11, que trava numa camada de empilhamento
 # que o fluxbox nunca reordena (testado: uma janela nova, mesmo em cima,
-# nao aparece por cima de uma fullscreen ja aberta). O botao flutuante
-# (oakos-totem-button) depende de reordenar janela nova por cima, entao
-# nada aqui pode usar fullscreen de verdade.
+# nao aparece por cima de uma fullscreen ja aberta). A dock (oakos-dock)
+# depende de reordenar janela por cima (nova ou existente), entao nada
+# aqui pode usar fullscreen de verdade.
 XTERM_OPTS = [
     "-bg", "black",
     "-fg", "white",
     "-fa", "DejaVu Sans Mono",
     "-fs", "16",
+    # xterm-256color: o 'oak' ja imprime cor de 256 cores de proposito (ver
+    # os codigos \x1b[38;5;Nm em overlay/usr/local/bin/oak); sem isso o
+    # xterm ainda EXIBE essas cores certo (suporte de 256 cores e do
+    # terminal, nao do TERM), mas programas que decidem o que emitir
+    # olhando TERM antes de mandar qualquer coisa (git, ripgrep, o proprio
+    # Claude Code) caem pro modo basico de 8 cores achando que o terminal
+    # nao aguenta mais que isso. O terminfo 'xterm-256color' ja vem no
+    # ncurses-base (dependencia do sistema base, confirmado -- nao precisa
+    # do pacote ncurses-term).
+    "-tn", "xterm-256color",
+    # saveLines: o padrao do xterm e 64 linhas de scrollback, o suficiente
+    # pra sumir com a saida de qualquer comando um pouco mais verboso. Isto
+    # aqui e pra ser o terminal principal do sistema (Shell/Claude/Herdr),
+    # nao um terminalzinho auxiliar -- 5000 linhas e o de qualquer terminal
+    # padrao de desktop hoje em dia.
+    "-sl", "5000",
+    # selectToClipboard: selecionar texto com o mouse (jeito padrao do xterm
+    # de copiar) grava tambem na selecao CLIPBOARD, nao so na PRIMARY -- sem
+    # isso da pra colar com o botao do meio, mas nao com Ctrl+V em nada que
+    # so entenda CLIPBOARD (o endereco do Chromium, por exemplo). As duas
+    # linhas de -xrm seguintes so ligam Ctrl+Shift+C/V pra copiar/colar
+    # nessa mesma selecao -- o xterm de fabrica nao tem atalho de teclado
+    # nenhum pra isso, so mouse. Sem essas tres linhas, um link de OAuth
+    # aberto no terminal (ex: 'claude /login') nao tem como ser copiado pra
+    # colar em outro lugar por teclado -- so selecao + botao do meio, o que
+    # ninguem tenta primeiro.
+    "-xrm", "XTerm*selectToClipboard: true",
+    "-xrm",
+    "XTerm*VT100.translations: #override \\n"
+    "    Ctrl Shift <Key>C: copy-selection(CLIPBOARD) \\n"
+    "    Ctrl Shift <Key>V: insert-selection(CLIPBOARD) \\n",
 ]
 
 # Cada entrada: comando (lista, sem passar por shell nenhum) + env extra.
 # OAK_NO_SHELL=1 e a mesma trava que o comando 'shell'/'sessoes' do oak ja
 # usa (ver overlay/usr/local/bin/oak): sem ela, o shell de login dentro do
 # xterm relancaria o oak (.zprofile faz isso por padrao).
+# '-T'/'-n' (titulo e nome do icone da janela) em cada xterm: sem um titulo
+# proprio os tres (Shell/Claude/Herdr) sao janelas "xterm" identicas pro
+# X11 -- a dock precisa desse nome pra saber qual e qual (ver oakos-dock).
 APPS = {
-    "shell": (["xterm", *XTERM_OPTS, "-e", "zsh", "-l"], {"OAK_NO_SHELL": "1"}),
-    "claude": (["xterm", *XTERM_OPTS, "-e", "/usr/local/bin/oak"], {}),
-    "chrome": (["chromium", "--no-sandbox", "--new-window", "about:blank"], {}),
-    "herdr": (["xterm", *XTERM_OPTS, "-e", "herdr"], {"OAK_NO_SHELL": "1"}),
-    "ide": (["chromium", "--no-sandbox", "--new-window", "http://localhost:8080"], {}),
+    "shell": (["xterm", *XTERM_OPTS, "-T", "Shell", "-e", "zsh", "-l"], {"OAK_NO_SHELL": "1"}),
+    "claude": (["xterm", *XTERM_OPTS, "-T", "Claude", "-e", "/usr/local/bin/oak"], {}),
+    # --test-type: some com a faixa amarela do Chromium avisando que
+    # '--no-sandbox' e flag nao suportada (ver browser.service pro motivo
+    # do '--no-sandbox' em si -- root nao roda o sandbox de namespaces).
+    "chrome": (["chromium", "--no-sandbox", "--test-type", "--new-window", "about:blank"], {}),
+    "herdr": (["xterm", *XTERM_OPTS, "-T", "Herdr", "-e", "herdr"], {"OAK_NO_SHELL": "1"}),
+    "ide": (["chromium", "--no-sandbox", "--test-type", "--new-window", "http://localhost:8080"], {}),
     "explorer": (["pcmanfm", "/root/workspace"], {}),
 }
 
@@ -145,17 +210,44 @@ PAGE = f"""<!doctype html>
     color: var(--text-dim);
     font-size: 14px;
   }}
+  .power {{
+    position: fixed;
+    left: 16px;
+    bottom: 16px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--card);
+    border: 1px solid #2a323a;
+    border-radius: 50%;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }}
+  .power:hover {{ background: #3a2226; color: #e08a8a; }}
+  .power svg {{ width: 20px; height: 20px; }}
 </style>
 </head>
 <body>
   <h1>OakOS</h1>
   <div class="grid">{CARDS}</div>
   <div class="hint">clique num icone pra abrir</div>
+  <button class="power" id="power" title="Desligar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+      <path d="M12 3v8"/>
+      <path d="M6.5 6.5a8 8 0 1 0 11 0"/>
+    </svg>
+  </button>
 <script>
 document.querySelectorAll('.card').forEach(function (el) {{
   el.addEventListener('click', function () {{
     fetch('/run/' + el.dataset.app);
   }});
+}});
+document.getElementById('power').addEventListener('click', function () {{
+  if (confirm('Desligar o OakOS?')) fetch('/shutdown');
 }});
 </script>
 </body>
@@ -177,20 +269,46 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
         if self.path.startswith("/run/"):
-            app = APPS.get(self.path[len("/run/") :])
+            key = self.path[len("/run/") :]
+            app = APPS.get(key)
             if app:
                 cmd, extra_env = app
                 env = {**os.environ, "DISPLAY": ":0", **extra_env}
-                subprocess.Popen(
+                proc = subprocess.Popen(
                     cmd,
                     env=env,
                     start_new_session=True,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
+                RUNNING[proc.pid] = key
                 self.send_response(204)
                 self.end_headers()
                 return
+        if self.path == "/open":
+            # Poda quem ja morreu (processo fechado, ex: 'exit' no shell)
+            # antes de responder -- e assim que a dock descobre que um
+            # icone deve sumir, sem precisar de nenhum sinal/hook nosso.
+            for pid in [p for p in RUNNING if not _alive(p)]:
+                del RUNNING[pid]
+            body = json.dumps(
+                [{"pid": pid, "app": app} for pid, app in RUNNING.items()]
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if self.path == "/shutdown":
+            # Mesmo comando do 'desligar' do oak (run('systemctl',
+            # ['poweroff'])) -- o launcher.service ja roda como root (sem
+            # 'User=' nenhum, ver launcher.service), entao nao precisa de
+            # sudo/polkit pra isso funcionar.
+            subprocess.Popen(["systemctl", "poweroff"])
+            self.send_response(204)
+            self.end_headers()
+            return
         self.send_response(404)
         self.end_headers()
 
